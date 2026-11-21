@@ -20,6 +20,8 @@ public class PublishCommand implements ApplicationRunner, ExitCodeGenerator {
 
     public static final String NAME = "publish";
 
+    private static final String BYTE_ORDER_MARK = "\uFEFF";
+
     private final PublishProducts publishProducts;
     private int exitCode;
 
@@ -50,7 +52,11 @@ public class PublishCommand implements ApplicationRunner, ExitCodeGenerator {
 
     private static List<String> read(Path file) {
         try {
-            return Files.readAllLines(file, UTF_8);
+            var lines = Files.readAllLines(file, UTF_8);
+            if (!lines.isEmpty() && lines.getFirst().startsWith(BYTE_ORDER_MARK)) {
+                lines.set(0, lines.getFirst().substring(BYTE_ORDER_MARK.length()));
+            }
+            return lines;
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
