@@ -30,4 +30,35 @@ class ProductCsvTest {
                 .extracting(Product::price)
                 .satisfies(actual -> assertThat(actual.toPlainString()).isEqualTo(expected));
     }
+
+    @ParameterizedTest
+    @CsvSource(delimiter = '|', value = {
+        "P001;Arroz;10063021              | expected 4 fields separated by ';', found 3",
+        "P001;Arroz;10063021;25.90;extra  | expected 4 fields separated by ';', found 5",
+        "P001;Arroz;10063021;25.90;       | expected 4 fields separated by ';', found 5",
+        "''                               | expected 4 fields separated by ';', found 1",
+        ";Arroz;10063021;25.90            | code is blank",
+        "' ;Arroz;10063021;25.90'         | code is blank",
+        "P001;;10063021;25.90             | description is blank",
+        "'P001; ;10063021;25.90'          | description is blank",
+        "P001;Arroz;1006302;25.90         | NCM must have 8 digits",
+        "P001;Arroz;100630211;25.90       | NCM must have 8 digits",
+        "P001;Arroz;1006.30.21;25.90      | NCM must have 8 digits",
+        "P001;Arroz;1006302A;25.90        | NCM must have 8 digits",
+        "'P001;Arroz; 10063021;25.90'     | NCM must have 8 digits",
+        "P001;Arroz;10063021;             | price must be a decimal number like 12.50",
+        "P001;Arroz;10063021;abc          | price must be a decimal number like 12.50",
+        "P001;Arroz;10063021;1E3          | price must be a decimal number like 12.50",
+        "P001;Arroz;10063021;-1           | price must be a decimal number like 12.50",
+        "'P001;Arroz;10063021; 5'         | price must be a decimal number like 12.50",
+        "P001;Arroz;10063021;10.005       | price has more than 2 decimal places",
+        "P001;Arroz;10063021;0            | price must be greater than zero",
+        "P001;Arroz;10063021;0.00         | price must be greater than zero",
+    })
+    void invalidLineIsRejectedWithItsLineNumberAndReason(String line, String reason) {
+        var result = ProductCsv.parse(List.of(HEADER, line));
+
+        assertThat(result.products()).isEmpty();
+        assertThat(result.rejected()).containsExactly(new RejectedLine(2, reason));
+    }
 }
