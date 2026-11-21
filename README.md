@@ -6,11 +6,18 @@ Suggests the CST and `cClassTrib` of each product in a catalog for Brazil's cons
 
 ## Status
 
-Skeleton and the official calculator: the build, the layer rules, the quality gates and the pinned calculator with its recorded responses. See the [roadmap](docs/roadmap.md).
+Skeleton, the official calculator, reading the products CSV and publishing products to Kafka: the build, the layer rules, the quality gates, the pinned calculator with its recorded responses, the CSV rules and the `produtos` topic. See the [roadmap](docs/roadmap.md).
 
 ## Build and test
 
-Requires JDK 25. The Maven Wrapper downloads Maven on first use.
+Requires JDK 25 and a running Docker engine: the Kafka tests start a real broker with Testcontainers. The Maven Wrapper downloads Maven on first use.
+
+With Colima instead of Docker Desktop, point Testcontainers at its socket first:
+
+```sh
+export DOCKER_HOST="unix://$HOME/.colima/default/docker.sock"
+export TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE=/var/run/docker.sock
+```
 
 ```sh
 ./mvnw verify                             # build, tests, coverage and mutation gates
