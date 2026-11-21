@@ -46,6 +46,14 @@ class PublishCommandTest {
         assertThat(out.toString(UTF_8)).isEqualTo("products published: 1, lines rejected: 1%n".formatted());
     }
 
+    @Test
+    void wrongHeaderCountsNoProductAsPublished() throws IOException {
+        var file = csv("description;code;ncm;price", "Arroz tipo 1 5kg;P001;10063021;25.90");
+
+        assertThat(run("publish", file.toString())).isEqualTo(1);
+        assertThat(out.toString(UTF_8)).isEqualTo("products published: 0, lines rejected: 2%n".formatted());
+    }
+
     private int run(String... args) {
         var command = new PublishCommand(new PublishProducts(published::addAll));
         return command.publish(List.of(args), new PrintStream(out, true, UTF_8), new PrintStream(err, true, UTF_8));
