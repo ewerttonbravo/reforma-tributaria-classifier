@@ -11,7 +11,7 @@ public final class ProductCsv {
 
     private static final String HEADER = "code;description;ncm;price";
     private static final Pattern NCM = Pattern.compile("\\d{8}");
-    private static final Pattern PRICE = Pattern.compile("\\d+(\\.\\d+)?");
+    private static final Pattern PRICE = Pattern.compile("-?\\d+(\\.\\d+)?");
 
     public static ProductCsvResult parse(List<String> lines) {
         var products = new ArrayList<Product>();
@@ -39,6 +39,9 @@ public final class ProductCsv {
         if (fields[0].isBlank()) {
             return Optional.of("code is blank");
         }
+        if (!fields[0].equals(fields[0].strip())) {
+            return Optional.of("code has leading or trailing spaces");
+        }
         if (fields[1].isBlank()) {
             return Optional.of("description is blank");
         }
@@ -52,7 +55,7 @@ public final class ProductCsv {
         if (price.scale() > 2) {
             return Optional.of("price has more than 2 decimal places");
         }
-        if (price.signum() == 0) {
+        if (price.signum() <= 0) {
             return Optional.of("price must be greater than zero");
         }
         return Optional.empty();
