@@ -12,6 +12,7 @@ import java.nio.file.Path;
 import java.util.List;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
+import org.springframework.boot.DefaultApplicationArguments;
 import org.springframework.boot.ExitCodeGenerator;
 import org.springframework.stereotype.Component;
 
@@ -22,7 +23,7 @@ import org.springframework.stereotype.Component;
 @Component
 public class PublishCommand implements ApplicationRunner, ExitCodeGenerator {
 
-    public static final String NAME = "publish";
+    private static final String NAME = "publish";
 
     private static final String BYTE_ORDER_MARK = "﻿";
 
@@ -33,11 +34,16 @@ public class PublishCommand implements ApplicationRunner, ExitCodeGenerator {
         this.publishProducts = publishProducts;
     }
 
+    /** Whether the arguments ask for this command, read the way Spring reads them: options are skipped. */
+    public static boolean isRequested(String... args) {
+        var command = new DefaultApplicationArguments(args).getNonOptionArgs();
+        return !command.isEmpty() && command.getFirst().equals(NAME);
+    }
+
     @Override
     public void run(ApplicationArguments args) {
-        var command = args.getNonOptionArgs();
-        if (!command.isEmpty() && command.getFirst().equals(NAME)) {
-            exitCode = publish(command, System.out, System.err);
+        if (isRequested(args.getSourceArgs())) {
+            exitCode = publish(args.getNonOptionArgs(), System.out, System.err);
         }
     }
 
