@@ -16,15 +16,17 @@ public final class ProductCsv {
     public static ProductCsvResult parse(List<String> lines) {
         var products = new ArrayList<Product>();
         var rejected = new ArrayList<RejectedLine>();
-        if (lines.isEmpty() || !lines.getFirst().equals(HEADER)) {
+        var headerIsRight = !lines.isEmpty() && lines.getFirst().equals(HEADER);
+        if (!headerIsRight) {
             rejected.add(new RejectedLine(1, "expected header '" + HEADER + "'"));
         }
         for (int i = 1; i < lines.size(); i++) {
             var lineNumber = i + 1;
             // -1 keeps trailing empty fields, so "a;b;c;d;" counts five fields
             var fields = lines.get(i).split(";", -1);
-            reasonToReject(fields).ifPresentOrElse(
-                    reason -> rejected.add(new RejectedLine(lineNumber, reason)),
+            var reason = headerIsRight ? reasonToReject(fields) : Optional.of("not read: the header is wrong");
+            reason.ifPresentOrElse(
+                    why -> rejected.add(new RejectedLine(lineNumber, why)),
                     () -> products.add(toProduct(fields)));
         }
         return new ProductCsvResult(List.copyOf(products), List.copyOf(rejected));
