@@ -54,6 +54,15 @@ class PublishCommandTest {
         assertThat(out.toString(UTF_8)).isEqualTo("products published: 0, lines rejected: 2%n".formatted());
     }
 
+    @Test
+    void byteOrderMarkIsRemovedBeforeParsing() throws IOException {
+        // Excel writes a UTF-8 BOM; left in place it makes the header wrong and every line is rejected.
+        var file = csv("\uFEFF" + HEADER, "P001;Arroz tipo 1 5kg;10063021;25.90");
+
+        assertThat(run("publish", file.toString())).isZero();
+        assertThat(published).extracting(Product::code).containsExactly("P001");
+    }
+
     private int run(String... args) {
         var command = new PublishCommand(new PublishProducts(published::addAll));
         return command.publish(List.of(args), new PrintStream(out, true, UTF_8), new PrintStream(err, true, UTF_8));
