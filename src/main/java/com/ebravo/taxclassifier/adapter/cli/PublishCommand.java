@@ -8,8 +8,10 @@ import java.io.IOException;
 import java.io.PrintStream;
 import java.nio.charset.CharacterCodingException;
 import java.nio.file.Files;
+import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Objects;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.DefaultApplicationArguments;
@@ -25,7 +27,7 @@ public class PublishCommand implements ApplicationRunner, ExitCodeGenerator {
 
     private static final String NAME = "publish";
 
-    private static final String BYTE_ORDER_MARK = "﻿";
+    private static final String BYTE_ORDER_MARK = "\uFEFF";
 
     private final PublishProducts publishProducts;
     private int exitCode;
@@ -56,7 +58,12 @@ public class PublishCommand implements ApplicationRunner, ExitCodeGenerator {
         if (args.size() != 2) {
             return fail(err, "expected one CSV file, usage: publish <file>");
         }
-        var file = Path.of(args.get(1));
+        Path file;
+        try {
+            file = Path.of(args.get(1));
+        } catch (InvalidPathException e) {
+            return fail(err, "invalid path (" + e.getReason() + ")");
+        }
         List<String> lines;
         try {
             lines = Files.readString(file, UTF_8).replaceFirst("^" + BYTE_ORDER_MARK, "").lines().toList();
@@ -69,7 +76,8 @@ public class PublishCommand implements ApplicationRunner, ExitCodeGenerator {
         try {
             result = publishProducts.publish(lines);
         } catch (RuntimeException e) {
-            return fail(err, rootCause(e).getMessage());
+            var cause = rootCause(e);
+            return fail(err, Objects.requireNonNullElse(cause.getMessage(), cause.getClass().getSimpleName()));
         }
         result.rejected().forEach(line -> err.println("line " + line.lineNumber() + ": " + line.reason()));
         out.println("products published: " + result.products().size() + ", lines rejected: " + result.rejected().size());

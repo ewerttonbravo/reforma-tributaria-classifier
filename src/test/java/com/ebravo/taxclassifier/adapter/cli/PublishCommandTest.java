@@ -101,7 +101,7 @@ class PublishCommandTest {
     @Test
     void invalidPathExitsTwo() {
         assertThat(run("publish", "products\0.csv")).isEqualTo(2);
-        assertThat(err.toString(UTF_8)).startsWith("publish failed: invalid path products");
+        assertThat(err.toString(UTF_8)).isEqualTo("publish failed: invalid path (Nul character not allowed)%n".formatted());
     }
 
     @Test
