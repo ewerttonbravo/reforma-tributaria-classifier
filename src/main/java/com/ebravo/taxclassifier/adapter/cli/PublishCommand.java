@@ -52,11 +52,8 @@ public class PublishCommand implements ApplicationRunner, ExitCodeGenerator {
 
     private static List<String> read(Path file) {
         try {
-            var lines = Files.readAllLines(file, UTF_8);
-            if (!lines.isEmpty() && lines.getFirst().startsWith(BYTE_ORDER_MARK)) {
-                lines.set(0, lines.getFirst().substring(BYTE_ORDER_MARK.length()));
-            }
-            return lines;
+            var text = Files.readString(file, UTF_8);
+            return text.replaceFirst("^" + BYTE_ORDER_MARK, "").lines().toList();
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
