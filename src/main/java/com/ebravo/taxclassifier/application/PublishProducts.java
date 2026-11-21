@@ -1,7 +1,7 @@
 package com.ebravo.taxclassifier.application;
 
 import com.ebravo.taxclassifier.domain.ProductCsv;
-import com.ebravo.taxclassifier.domain.RejectedLine;
+import com.ebravo.taxclassifier.domain.ProductCsvResult;
 import java.util.List;
 
 public final class PublishProducts {
@@ -12,10 +12,10 @@ public final class PublishProducts {
         this.publisher = publisher;
     }
 
-    /** Publishes the valid products of the CSV lines and returns the lines that were rejected. */
-    public List<RejectedLine> publish(List<String> csvLines) {
+    /** Publishes the valid products of the CSV lines and returns what was published and rejected. */
+    public ProductCsvResult publish(List<String> csvLines) {
         var result = ProductCsv.parse(csvLines);
         publisher.publish(result.products());
-        return result.rejected();
+        return result;
     }
 }

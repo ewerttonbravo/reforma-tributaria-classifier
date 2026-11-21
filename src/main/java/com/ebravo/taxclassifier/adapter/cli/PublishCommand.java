@@ -42,11 +42,10 @@ public class PublishCommand implements ApplicationRunner, ExitCodeGenerator {
 
     int publish(List<String> args, PrintStream out, PrintStream err) {
         var lines = read(Path.of(args.get(1)));
-        var rejected = publishProducts.publish(lines);
-        rejected.forEach(line -> err.println("line " + line.lineNumber() + ": " + line.reason()));
-        var published = lines.size() - 1 - rejected.size();
-        out.println("products published: " + published + ", lines rejected: " + rejected.size());
-        return rejected.isEmpty() ? 0 : 1;
+        var result = publishProducts.publish(lines);
+        result.rejected().forEach(line -> err.println("line " + line.lineNumber() + ": " + line.reason()));
+        out.println("products published: " + result.products().size() + ", lines rejected: " + result.rejected().size());
+        return result.rejected().isEmpty() ? 0 : 1;
     }
 
     private static List<String> read(Path file) {

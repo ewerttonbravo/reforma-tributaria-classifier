@@ -27,9 +27,9 @@ class PublishProductsTest {
 
     @Test
     void rejectedLinesAreReturnedAndNeverPublished() {
-        var rejected = publishProducts.publish(List.of(HEADER, "P001;Arroz 5kg;1006;25.90", "P002;Feijao 1kg;07133319;8.49"));
+        var result = publishProducts.publish(List.of(HEADER, "P001;Arroz 5kg;1006;25.90", "P002;Feijao 1kg;07133319;8.49"));
 
-        assertThat(rejected).containsExactly(new RejectedLine(2, "NCM must have 8 digits"));
-        assertThat(published).extracting(Product::code).containsExactly("P002");
+        assertThat(result.rejected()).containsExactly(new RejectedLine(2, "NCM must have 8 digits"));
+        assertThat(published).isEqualTo(result.products()).extracting(Product::code).containsExactly("P002");
     }
 }
