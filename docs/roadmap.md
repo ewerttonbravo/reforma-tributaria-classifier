@@ -24,10 +24,10 @@ Approved by the maintainer on 2026-11-20. The unit of work is the task: one obse
 | # | Task | Observable outcome | Depends on |
 |---|---|---|---|
 | 00 | Skeleton | Spring Boot on Java 25 with the Maven Wrapper; ArchUnit enforces `domain` / `application` / `adapter`; the JaCoCo and PIT gates are proven to fail on untested code; CI on GitHub Actions | GitHub repository |
-| 01 | Official calculator | The calculator runs on `:8080` at a pinned commit, with the steps in the README; real responses from the 3 endpoints saved as fixtures; confirms which endpoint returns `cClassTrib` per NCM | 00; JDK 21 for the calculator |
+| 01 | Official calculator | The calculator runs on `:8080` at a pinned commit, with the steps in the README; real responses from the 3 endpoints saved as fixtures; settles whether the calculator lists `cClassTrib` per NCM (it does not, design D5) | 00; JDK 25 for the calculator |
 | 02 | Read products CSV | Domain: CSV line → `Product` (code, description, NCM, `BigDecimal` price); an invalid line is reported with its line number, never dropped silently | 00 |
 | 03 | Publish products | `compose.yaml` with Kafka in KRaft mode; 1 command publishes the CSV to `produtos` with key = product code, `acks=all` and idempotence; Testcontainers proves the same key lands on the same partition | 02 |
-| 04 | Official candidates | Port + HTTP adapter: given an NCM, returns the official list of CST / `cClassTrib`; contract test with the fixtures from 01 | 01 |
+| 04 | Official candidates | Port + HTTP adapter: given a date, returns the official CBS/IBS list of CST / `cClassTrib` (the calculator has no list per NCM, see design D5); contract test with the fixtures from 01 | 01 |
 | 05 | Validate AI suggestion | Domain: a suggestion outside the list or below the confidence threshold → review with a reason; inside → accepted | 00 |
 | 06 | Claude adapter | Port + `claude-haiku-5-5` adapter with structured JSON output; contract via HTTP stub; manual checklist with the real key | 05 |
 | 07 | Classification consumer | Consumes `produtos` and publishes to `produtos-classificados` or `produtos-revisao` (Testcontainers + fakes) | 03, 04, 06 |
@@ -47,6 +47,5 @@ Tasks 10 to 15 each close with their section in `docs/failure-scenarios.md`.
 ## Open decisions (settled at the elucidation of the task shown)
 - **12 × 14:** non-blocking retry (`@RetryableTopic`) moves the message to retry topics and breaks per-product ordering, which scenario 5 requires. Blocking retry (`DefaultErrorHandler` with backoff) keeps the order but stalls the partition.
 - **09:** where `NAO_IMPLEMENTADO` is routed.
-- **01:** whether the calculator filters `cClassTrib` by NCM; if not, task 04 changes shape.
 
 The order follows the phases: base, AI classification, calculation, resilience, proof. Task 01 comes early because the official calculator is the largest external unknown.

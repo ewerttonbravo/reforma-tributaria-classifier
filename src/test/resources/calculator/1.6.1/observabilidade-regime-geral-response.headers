@@ -1,0 +1,4 @@
+HTTP/1.1 200 
+X-CALC-APP-VERSION: 1.6.1
+X-CALC-DB-VERSION: V0059
+x-warning-dados-simulados: 6
