@@ -9,12 +9,16 @@ import java.util.regex.Pattern;
 
 public final class ProductCsv {
 
+    private static final String HEADER = "code;description;ncm;price";
     private static final Pattern NCM = Pattern.compile("\\d{8}");
     private static final Pattern PRICE = Pattern.compile("\\d+(\\.\\d+)?");
 
     public static ProductCsvResult parse(List<String> lines) {
         var products = new ArrayList<Product>();
         var rejected = new ArrayList<RejectedLine>();
+        if (lines.isEmpty() || !lines.getFirst().equals(HEADER)) {
+            rejected.add(new RejectedLine(1, "expected header '" + HEADER + "'"));
+        }
         for (int i = 1; i < lines.size(); i++) {
             var lineNumber = i + 1;
             // -1 keeps trailing empty fields, so "a;b;c;d;" counts five fields
