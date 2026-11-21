@@ -104,6 +104,14 @@ class PublishCommandTest {
         assertThat(err.toString(UTF_8)).isEqualTo("publish failed: expected one CSV file, usage: publish <file>%n".formatted());
     }
 
+    @Test
+    void anOptionBeforeTheCommandStillRequestsIt() {
+        // main decides whether to exit with the command's code; reading only args[0] would end with 0.
+        assertThat(PublishCommand.isRequested("--spring.kafka.bootstrap-servers=broker:9092", "publish", "f.csv")).isTrue();
+        assertThat(PublishCommand.isRequested("--spring.main.banner-mode=off")).isFalse();
+        assertThat(PublishCommand.isRequested()).isFalse();
+    }
+
     private int run(String... args) {
         return run(published::addAll, args);
     }
