@@ -47,8 +47,8 @@ class KafkaProductPublisherTest {
     void eachProductIsKeyedByItsCodeWithAJsonValue() throws Exception {
         var records = publishAndRead(List.of(new Product("P001", "Arroz tipo 1 5kg", "10063021", new BigDecimal("25.90"))));
 
-        var record = records.getFirst();
         assertThat(records).hasSize(1);
+        var record = records.getFirst();
         assertThat(record.key()).isEqualTo("P001");
         JSONAssert.assertEquals(
                 """
