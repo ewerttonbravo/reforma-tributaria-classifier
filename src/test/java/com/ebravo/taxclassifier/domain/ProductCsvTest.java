@@ -61,4 +61,36 @@ class ProductCsvTest {
         assertThat(result.products()).isEmpty();
         assertThat(result.rejected()).containsExactly(new RejectedLine(2, reason));
     }
+
+    @Test
+    void wrongHeaderIsRejectedAndTheProductsAfterItAreStillRead() {
+        var result = ProductCsv.parse(List.of("code;description;price;ncm", "P001;Arroz;10063021;25.90"));
+
+        assertThat(result.rejected())
+                .containsExactly(new RejectedLine(1, "expected header 'code;description;ncm;price'"));
+        assertThat(result.products()).extracting(Product::code).containsExactly("P001");
+    }
+
+    @Test
+    void emptyInputIsRejectedAsAMissingHeader() {
+        var result = ProductCsv.parse(List.of());
+
+        assertThat(result.rejected())
+                .containsExactly(new RejectedLine(1, "expected header 'code;description;ncm;price'"));
+        assertThat(result.products()).isEmpty();
+    }
+
+    @Test
+    void everyDataLineEndsUpAsAProductOrARejectionInFileOrder() {
+        var result = ProductCsv.parse(List.of(
+                HEADER,
+                "P001;Arroz;10063021;25.90",
+                "P002;Feijao;0713",
+                "P001;Arroz integral;10063021;27.90",
+                "P003;Cerveja;22030000;0"));
+
+        assertThat(result.products()).extracting(Product::description)
+                .containsExactly("Arroz", "Arroz integral");
+        assertThat(result.rejected()).extracting(RejectedLine::lineNumber).containsExactly(3, 5);
+    }
 }
