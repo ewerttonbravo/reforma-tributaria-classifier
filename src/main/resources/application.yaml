@@ -7,3 +7,7 @@ spring:
       properties:
         enable.idempotence: true
         spring.json.add.type.headers: false
+logging:
+  level:
+    # The Kafka client logs its whole configuration at INFO, which would bury the command's summary.
+    org.apache.kafka: warn
