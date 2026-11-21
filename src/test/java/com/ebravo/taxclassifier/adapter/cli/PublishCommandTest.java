@@ -99,6 +99,23 @@ class PublishCommandTest {
     }
 
     @Test
+    void invalidPathExitsTwo() {
+        assertThat(run("publish", "products\0.csv")).isEqualTo(2);
+        assertThat(err.toString(UTF_8)).startsWith("publish failed: invalid path products");
+    }
+
+    @Test
+    void failureWithoutMessageNamesItsType() throws IOException {
+        var file = csv(HEADER, "P001;Arroz tipo 1 5kg;10063021;25.90");
+        ProductPublisher failing = products -> {
+            throw new IllegalStateException("Send failed", new NullPointerException());
+        };
+
+        assertThat(run(failing, "publish", file.toString())).isEqualTo(2);
+        assertThat(err.toString(UTF_8)).isEqualTo("publish failed: NullPointerException%n".formatted());
+    }
+
+    @Test
     void publishWithoutFileExitsTwo() {
         assertThat(run("publish")).isEqualTo(2);
         assertThat(err.toString(UTF_8)).isEqualTo("publish failed: expected one CSV file, usage: publish <file>%n".formatted());
