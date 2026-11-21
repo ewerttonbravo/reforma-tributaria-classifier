@@ -42,8 +42,8 @@ The file is a UTF-8 CSV with the header `code;description;ncm;price` (a byte ord
 | Code | Meaning |
 |---|---|
 | 0 | Every line was published |
-| 1 | The valid lines were published; each rejected line is on stderr as `line N: <reason>` |
-| 2 | Nothing is guaranteed published: `publish failed: <reason>` on stderr (missing file, not UTF-8, Kafka unreachable) |
+| 1 | The valid lines were published, possibly none (a wrong header rejects every line); each rejected line is on stderr as `line N: <reason>` |
+| 2 | Nothing is guaranteed published: `publish failed: <reason>` on stderr (missing file, not UTF-8, Kafka unreachable, which takes about 30 s to report) |
 
 See what reached the topic, with the partition of each key:
 
