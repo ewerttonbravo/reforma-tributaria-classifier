@@ -1,13 +1,21 @@
 spring:
+  main:
+    banner-mode: off
   kafka:
     bootstrap-servers: localhost:9092
+    admin:
+      operation-timeout: 10s
     producer:
       acks: all
       value-serializer: org.springframework.kafka.support.serializer.JacksonJsonSerializer
       properties:
         enable.idempotence: true
+        # Fail a send to an unreachable broker in 10 s instead of the default 60 s.
+        max.block.ms: 10000
         spring.json.add.type.headers: false
 logging:
   level:
-    # The Kafka client logs its whole configuration at INFO, which would bury the command's summary.
-    org.apache.kafka: warn
+    # stdout carries the command's summary only; the command reports a Kafka failure itself on stderr.
+    root: warn
+    org.apache.kafka: error
+    org.springframework.kafka: off
