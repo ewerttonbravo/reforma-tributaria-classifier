@@ -3,9 +3,10 @@ package com.ebravo.taxclassifier.adapter.cli;
 import static java.nio.charset.StandardCharsets.UTF_8;
 
 import com.ebravo.taxclassifier.application.PublishProducts;
+import com.ebravo.taxclassifier.domain.ProductCsvResult;
 import java.io.IOException;
 import java.io.PrintStream;
-import java.io.UncheckedIOException;
+import java.nio.charset.CharacterCodingException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -14,13 +15,16 @@ import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.ExitCodeGenerator;
 import org.springframework.stereotype.Component;
 
-/** {@code publish <file>}: exits with 0 when every line is published and 1 when some line was rejected. */
+/**
+ * {@code publish <file>}: exits with 0 when every line is published, 1 when some line was rejected and
+ * 2 when the file could not be read or the products could not be published.
+ */
 @Component
 public class PublishCommand implements ApplicationRunner, ExitCodeGenerator {
 
     public static final String NAME = "publish";
 
-    private static final String BYTE_ORDER_MARK = "\uFEFF";
+    private static final String BYTE_ORDER_MARK = "﻿";
 
     private final PublishProducts publishProducts;
     private int exitCode;
@@ -43,19 +47,35 @@ public class PublishCommand implements ApplicationRunner, ExitCodeGenerator {
     }
 
     int publish(List<String> args, PrintStream out, PrintStream err) {
-        var lines = read(Path.of(args.get(1)));
-        var result = publishProducts.publish(lines);
+        if (args.size() != 2) {
+            return fail(err, "expected one CSV file, usage: publish <file>");
+        }
+        var file = Path.of(args.get(1));
+        List<String> lines;
+        try {
+            lines = Files.readString(file, UTF_8).replaceFirst("^" + BYTE_ORDER_MARK, "").lines().toList();
+        } catch (CharacterCodingException e) {
+            return fail(err, file + " is not UTF-8");
+        } catch (IOException e) {
+            return fail(err, "cannot read " + file + " (" + e.getClass().getSimpleName() + ")");
+        }
+        ProductCsvResult result;
+        try {
+            result = publishProducts.publish(lines);
+        } catch (RuntimeException e) {
+            return fail(err, rootCause(e).getMessage());
+        }
         result.rejected().forEach(line -> err.println("line " + line.lineNumber() + ": " + line.reason()));
         out.println("products published: " + result.products().size() + ", lines rejected: " + result.rejected().size());
         return result.rejected().isEmpty() ? 0 : 1;
     }
 
-    private static List<String> read(Path file) {
-        try {
-            var text = Files.readString(file, UTF_8);
-            return text.replaceFirst("^" + BYTE_ORDER_MARK, "").lines().toList();
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
-        }
+    private static int fail(PrintStream err, String reason) {
+        err.println("publish failed: " + reason);
+        return 2;
+    }
+
+    private static Throwable rootCause(Throwable e) {
+        return e.getCause() == null ? e : rootCause(e.getCause());
     }
 }
