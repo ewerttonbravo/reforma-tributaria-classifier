@@ -40,7 +40,7 @@ Approved by the maintainer on 2026-11-20. The unit of work is the task: one obse
 | 14 | Ordering per product | Two updates of the same product are processed in order (scenario 5) | 12 |
 | 15 | Rebalance | 2 instances, one killed mid-processing: nothing lost, nothing duplicated (scenario 6) | 11 |
 | 16 | End to end | `docker compose up` + calculator + 1 command process the sample CSV; README with diagram, tax-liability notice and the pinned calculator version; checks that the 5 required ADRs exist | 15 |
-| 17 | Publish | Repository made public, with description and topics | 16; every failure scenario reproduced and broken by hand |
+| 17 | Release | Repository description and topics set; the repository is public since task 00 | 16; every failure scenario reproduced and broken by hand |
 
 Tasks 10 to 15 each close with their section in `docs/failure-scenarios.md`.
 
