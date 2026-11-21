@@ -1,6 +1,6 @@
 # Roadmap
 
-Approved by the maintainer on 2026-11-20. The unit of work is the task: one observable behavior, one small PR.
+Approved by the maintainer on 2026-11-20; task 03 split into 03a and 03b on 2026-11-21 to stay under the size gate. The unit of work is the task: one observable behavior, one small PR.
 
 ## Frame of every task
 **Elucidate**, before any code:
@@ -26,11 +26,12 @@ Approved by the maintainer on 2026-11-20. The unit of work is the task: one obse
 | 00 | Skeleton | Spring Boot on Java 25 with the Maven Wrapper; ArchUnit enforces `domain` / `application` / `adapter`; the JaCoCo and PIT gates are proven to fail on untested code; CI on GitHub Actions | GitHub repository |
 | 01 | Official calculator | The calculator runs on `:8080` at a pinned commit, with the steps in the README; real responses from the 3 endpoints saved as fixtures; settles whether the calculator lists `cClassTrib` per NCM (it does not, design D5) | 00; JDK 25 for the calculator |
 | 02 | Read products CSV | Domain: CSV line → `Product` (code, description, NCM, `BigDecimal` price); an invalid line is reported with its line number, never dropped silently | 00 |
-| 03 | Publish products | `compose.yaml` with Kafka in KRaft mode; 1 command publishes the CSV to `produtos` with key = product code, `acks=all` and idempotence; Testcontainers proves the same key lands on the same partition | 02 |
+| 03a | Kafka product publisher | Use case publishes the valid products of the CSV through a port; the Kafka adapter sends them to `produtos` (3 partitions) with key = product code, a JSON value with the price as a string, `acks=all` and idempotence; Testcontainers proves the same key lands on the same partition, in order | 02 |
+| 03b | Publish command | `compose.yaml` with Kafka in KRaft mode; 1 command reads the CSV file (UTF-8, BOM removed), publishes the valid lines, prints each rejected line with its number and reason to stderr and exits with 1 if any line was rejected; sample CSV | 03a |
 | 04 | Official candidates | Port + HTTP adapter: given a date, returns the official CBS/IBS list of CST / `cClassTrib` (the calculator has no list per NCM, see design D5); contract test with the fixtures from 01 | 01 |
 | 05 | Validate AI suggestion | Domain: a suggestion outside the list or below the confidence threshold → review with a reason; inside → accepted | 00 |
 | 06 | Claude adapter | Port + `claude-haiku-5-5` adapter with structured JSON output; contract via HTTP stub; manual checklist with the real key | 05 |
-| 07 | Classification consumer | Consumes `produtos` and publishes to `produtos-classificados` or `produtos-revisao` (Testcontainers + fakes) | 03, 04, 06 |
+| 07 | Classification consumer | Consumes `produtos` and publishes to `produtos-classificados` or `produtos-revisao` (Testcontainers + fakes) | 03a, 04, 06 |
 | 08 | Calculate CBS/IBS | Port + `POST /observabilidade/regime-geral` adapter; `estadoItem` → `sealed` result; `dhFatoGerador` at `-03:00`; contract with the official examples | 01 |
 | 09 | Route by estadoItem | Classified with CBS/IBS amounts for `CALCULADO` / `CALCULO_SIMULADO`; `INCONSISTENCIA_ENTRADA` and `REG-011` → review (scenario 4) | 07, 08 |
 | 10 | Manual offset commit | Offset committed only after publishing; a crash before publishing → reprocessed | 09 |
@@ -39,7 +40,7 @@ Approved by the maintainer on 2026-11-20. The unit of work is the task: one obse
 | 13 | Exhausted retry → review | A permanent failure goes to `produtos-revisao` with its cause (scenario 3) | 12 |
 | 14 | Ordering per product | Two updates of the same product are processed in order (scenario 5) | 12 |
 | 15 | Rebalance | 2 instances, one killed mid-processing: nothing lost, nothing duplicated (scenario 6) | 11 |
-| 16 | End to end | `docker compose up` + calculator + 1 command process the sample CSV; README with diagram, tax-liability notice and the pinned calculator version; checks that the 5 required ADRs exist | 15 |
+| 16 | End to end | `docker compose up` + calculator + 1 command process the sample CSV; README with diagram, tax-liability notice and the pinned calculator version; checks that the 5 required ADRs exist | 15, 03b |
 | 17 | Release | Repository description and topics set; the repository is public since task 00 | 16; every failure scenario reproduced and broken by hand |
 
 Tasks 10 to 15 each close with their section in `docs/failure-scenarios.md`.
