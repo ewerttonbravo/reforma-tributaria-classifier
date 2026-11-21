@@ -63,12 +63,13 @@ class ProductCsvTest {
     }
 
     @Test
-    void wrongHeaderIsRejectedAndTheProductsAfterItAreStillRead() {
-        var result = ProductCsv.parse(List.of("code;description;price;ncm", "P001;Arroz;10063021;25.90"));
+    void wrongHeaderRejectsEveryLineSoSwappedColumnsAreNeverRead() {
+        var result = ProductCsv.parse(List.of("description;code;ncm;price", "Arroz;P001;10063021;25.90"));
 
-        assertThat(result.rejected())
-                .containsExactly(new RejectedLine(1, "expected header 'code;description;ncm;price'"));
-        assertThat(result.products()).extracting(Product::code).containsExactly("P001");
+        assertThat(result.rejected()).containsExactly(
+                new RejectedLine(1, "expected header 'code;description;ncm;price'"),
+                new RejectedLine(2, "not read: the header is wrong"));
+        assertThat(result.products()).isEmpty();
     }
 
     @Test
