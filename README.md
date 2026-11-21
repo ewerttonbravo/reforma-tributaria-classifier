@@ -6,7 +6,7 @@ Suggests the CST and `cClassTrib` of each product in a catalog for Brazil's cons
 
 ## Status
 
-Skeleton, the official calculator, reading the products CSV and publishing products to Kafka: the build, the layer rules, the quality gates, the pinned calculator with its recorded responses, the CSV rules and the `produtos` topic. See the [roadmap](docs/roadmap.md).
+Skeleton, the official calculator and publishing a products CSV to Kafka: the build, the layer rules, the quality gates, the pinned calculator with its recorded responses, the CSV rules, the `produtos` topic and the publish command. See the [roadmap](docs/roadmap.md).
 
 ## Build and test
 
@@ -26,6 +26,31 @@ export TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE=/var/run/docker.sock
 ```
 
 `verify` fails below 100% line, branch and mutation coverage in `domain` and `application` ([design](docs/design.md#decisions)).
+
+## Publish products
+
+Start Kafka, build the jar once and publish the sample catalog of fictitious products:
+
+```sh
+docker compose up -d                                       # Kafka 4.2.2 in KRaft mode on localhost:9092
+./mvnw -DskipTests package
+java -jar target/tax-classifier.jar publish samples/products.csv
+```
+
+The file is a UTF-8 CSV with the header `code;description;ncm;price` (a byte order mark is accepted). Each product goes to the `produtos` topic keyed by its code. The command prints one summary line and exits with:
+
+| Code | Meaning |
+|---|---|
+| 0 | Every line was published |
+| 1 | The valid lines were published, possibly none (a wrong header rejects every line); each rejected line is on stderr as `line N: <reason>` |
+| 2 | Nothing is guaranteed published: `publish failed: <reason>` on stderr (missing file, not UTF-8, Kafka unreachable, which takes about 30 s to report) |
+
+See what reached the topic, with the partition of each key:
+
+```sh
+docker compose exec kafka /opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 \
+  --topic produtos --from-beginning --formatter-property print.key=true --formatter-property print.partition=true
+```
 
 ## Run the official calculator
 
