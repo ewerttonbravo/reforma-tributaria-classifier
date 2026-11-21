@@ -126,8 +126,6 @@
 						<param>com.ebravo.taxclassifier.application.*</param>
 					</targetTests>
 					<mutationThreshold>100</mutationThreshold>
-					<!-- Temporary: domain and application are still empty. Remove with the first domain class. -->
-					<failWhenNoMutations>false</failWhenNoMutations>
 					<timestampedReports>false</timestampedReports>
 					<outputFormats>
 						<param>HTML</param>
