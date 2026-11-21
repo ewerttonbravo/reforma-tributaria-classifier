@@ -5,6 +5,6 @@ import java.util.List;
 
 public interface ProductPublisher {
 
-    /** Publishes the products in the given order; returns once every one is accepted, or throws. */
+    /** Publishes the products, keeping the order of updates to the same code; returns once every one is accepted, or throws. */
     void publish(List<Product> products);
 }
