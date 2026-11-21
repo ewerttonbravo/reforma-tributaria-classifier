@@ -16,18 +16,40 @@ class ArchitectureRulesTest {
 
     @Test
     void domainDependingOnSpringIsAViolation() {
-        assertThat(violations(ArchitectureRules.DOMAIN_DEPENDS_ON_THE_JDK_ONLY))
-                .isNotEmpty()
-                .allMatch(line -> line.contains("SpringAwareProduct"))
-                .anyMatch(line -> line.contains("org.springframework.context.ApplicationContext"));
+        assertThat(domainViolations()).anyMatch(line -> line.contains("<org.springframework.context.ApplicationContext>"));
+    }
+
+    @Test
+    void domainDependingOnAThirdPartyDomainPackageIsAViolation() {
+        assertThat(domainViolations()).anyMatch(line -> line.contains("<com.tngtech.archunit.core.domain.JavaClass>"));
+    }
+
+    @Test
+    void domainDependingOnHttpIsAViolation() {
+        assertThat(domainViolations()).anyMatch(line -> line.contains("<java.net.http.HttpClient>"));
+    }
+
+    @Test
+    void domainDependingOnTheJdkCoreIsAllowed() {
+        assertThat(domainViolations()).noneMatch(line -> line.contains("archfixture.domain.Price"));
     }
 
     @Test
     void applicationDependingOnAnAdapterIsAViolation() {
-        assertThat(violations(ArchitectureRules.APPLICATION_DEPENDS_ON_THE_DOMAIN_AND_THE_JDK_ONLY))
-                .isNotEmpty()
-                .allMatch(line -> line.contains("ClassifyProduct"))
-                .anyMatch(line -> line.contains("archfixture.adapter.CalculatorClient"));
+        assertThat(applicationViolations()).anyMatch(line -> line.contains("<com.ebravo.taxclassifier.archfixture.adapter.CalculatorClient>"));
+    }
+
+    @Test
+    void applicationDependingOnTheDomainIsAllowed() {
+        assertThat(applicationViolations()).noneMatch(line -> line.contains("PriceProducts"));
+    }
+
+    private static List<String> domainViolations() {
+        return violations(ArchitectureRules.DOMAIN_DEPENDS_ON_THE_JDK_ONLY);
+    }
+
+    private static List<String> applicationViolations() {
+        return violations(ArchitectureRules.APPLICATION_DEPENDS_ON_THE_DOMAIN_AND_THE_JDK_ONLY);
     }
 
     private static List<String> violations(ArchRule rule) {
