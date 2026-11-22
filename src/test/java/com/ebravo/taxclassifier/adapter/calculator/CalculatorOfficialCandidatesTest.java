@@ -56,6 +56,14 @@ class CalculatorOfficialCandidatesTest {
                         "Documento com exclusão da BC da CBS e do IBS de energia elétrica fornecida pela distribuidora à UC"))));
     }
 
+    @Test
+    void dateWithNoOfficialListGivesAnEmptyList() {
+        calculator.expect(requestTo(LIST_FOR_DATE + "2020-01-01"))
+                .andRespond(withSuccess(recorded("situacoes-tributarias-cbs-ibs-2020-01-01.json"), APPLICATION_JSON));
+
+        assertThat(candidates.on(LocalDate.of(2020, 1, 1))).isEmpty();
+    }
+
     private static ClassPathResource recorded(String file) {
         return new ClassPathResource("calculator/1.6.1/" + file);
     }
