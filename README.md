@@ -6,7 +6,7 @@ Suggests the CST and `cClassTrib` of each product in a catalog for Brazil's cons
 
 ## Status
 
-Skeleton, the official calculator and publishing a products CSV to Kafka: the build, the layer rules, the quality gates, the pinned calculator with its recorded responses, the CSV rules, the `produtos` topic and the publish command. See the [roadmap](docs/roadmap.md).
+Skeleton, the official calculator and publishing a products CSV to Kafka: the build, the layer rules, the quality gates, the pinned calculator with its recorded responses, the CSV rules, the `produtos` topic, the publish command and reading the official CST and `cClassTrib` list from the calculator. See the [roadmap](docs/roadmap.md).
 
 ## Build and test
 
@@ -54,7 +54,7 @@ docker compose exec kafka /opt/kafka/bin/kafka-console-consumer.sh --bootstrap-s
 
 ## Run the official calculator
 
-The service calls the [official tax calculator](https://github.com/ReceitaFederal/calculadora-rtc-regime-regular) of the Receita Federal, pinned at tag `1.6.1` (commit `150cccb`). It runs as a separate process on port 8080. Tests will never need it: the contract tests of tasks 04 and 08 replay its responses recorded in `src/test/resources/calculator/1.6.1/`.
+The service calls the [official tax calculator](https://github.com/ReceitaFederal/calculadora-rtc-regime-regular) of the Receita Federal, pinned at tag `1.6.1` (commit `150cccb`). It runs as a separate process on port 8080; the service finds it at the `calculator.base-url` property, `http://localhost:8080/api/calculadora` by default. Tests never need it: the contract tests of tasks 04 and 08 replay its responses recorded in `src/test/resources/calculator/1.6.1/`.
 
 Clone it outside this repository and build it with JDK 25:
 
@@ -78,6 +78,7 @@ B=http://localhost:8080/api/calculadora
 F=src/test/resources/calculator/1.6.1        # run from this repository's root
 curl -s "$B/dados-abertos/versao"               # "versaoApp":"1.6.1"
 curl -s "$B/dados-abertos/situacoes-tributarias/cbs-ibs?data=2027-03-10" | cmp - $F/situacoes-tributarias-cbs-ibs-2027-03-10.json
+curl -s "$B/dados-abertos/situacoes-tributarias/cbs-ibs?data=2020-01-01" | cmp - $F/situacoes-tributarias-cbs-ibs-2020-01-01.json
 curl -s "$B/dados-abertos/fundamentacoes-legais?data=2027-03-10" | cmp - $F/fundamentacoes-legais-2027-03-10.json
 curl -s -X POST "$B/observabilidade/regime-geral" -H 'Content-Type: application/json' \
   -d @$F/observabilidade-regime-geral-request.json | cmp - $F/observabilidade-regime-geral-response.json
@@ -86,4 +87,4 @@ curl -s -D - -o /dev/null -X POST "$B/observabilidade/regime-geral" -H 'Content-
   | grep -iE '^HTTP/|^X-CALC-|^x-warning-dados-simulados' | cmp - $F/observabilidade-regime-geral-response.headers
 ```
 
-`cmp` prints nothing when the response matches the fixture. The headers fixture keeps only the status line (verbatim, trailing space included), the version headers and `x-warning-dados-simulados`.
+`cmp` prints nothing when the response matches the fixture. The 400 fixture, `situacoes-tributarias-cbs-ibs-invalid-date-400.json` (from `?data=xx`), is left out: it carries a timestamp. The headers fixture keeps only the status line (verbatim, trailing space included), the version headers and `x-warning-dados-simulados`.
