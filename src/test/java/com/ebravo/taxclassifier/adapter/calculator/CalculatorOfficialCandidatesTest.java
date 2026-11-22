@@ -8,6 +8,7 @@ import static org.springframework.http.MediaType.APPLICATION_PROBLEM_JSON;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withBadRequest;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withServerError;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
 import com.ebravo.taxclassifier.application.OfficialCandidates;
@@ -68,8 +69,9 @@ class CalculatorOfficialCandidatesTest {
         assertThat(candidates.on(LocalDate.of(2020, 1, 1))).isEmpty();
     }
 
+    /** The calculator was seen answering 400 only to a malformed date, which a LocalDate cannot send; its body stands for any 4xx. */
     @Test
-    void calculatorErrorIsNeverAnEmptyList() {
+    void calculatorClientErrorIsNeverAnEmptyList() {
         calculator.expect(requestTo(LIST_FOR_DATE + "2027-03-10"))
                 .andRespond(withBadRequest()
                         .contentType(APPLICATION_PROBLEM_JSON)
@@ -78,6 +80,15 @@ class CalculatorOfficialCandidatesTest {
         assertThatThrownBy(() -> candidates.on(LocalDate.of(2027, 3, 10)))
                 .isInstanceOfSatisfying(RestClientResponseException.class,
                         error -> assertThat(error.getStatusCode().value()).isEqualTo(400));
+    }
+
+    @Test
+    void calculatorServerErrorIsNeverAnEmptyList() {
+        calculator.expect(requestTo(LIST_FOR_DATE + "2027-03-10")).andRespond(withServerError());
+
+        assertThatThrownBy(() -> candidates.on(LocalDate.of(2027, 3, 10)))
+                .isInstanceOfSatisfying(RestClientResponseException.class,
+                        error -> assertThat(error.getStatusCode().value()).isEqualTo(500));
     }
 
     private static ClassPathResource recorded(String file) {
