@@ -13,6 +13,8 @@ spring:
         # Fail a send to an unreachable broker in 10 s instead of the default 60 s.
         max.block.ms: 10000
         spring.json.add.type.headers: false
+calculator:
+  base-url: http://localhost:8080/api/calculadora
 logging:
   level:
     # stdout carries the command's summary only; the command reports a Kafka failure itself on stderr.
