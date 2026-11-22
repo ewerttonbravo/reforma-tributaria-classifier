@@ -1,0 +1,1 @@
+{"type":"http://localhost/errors/tipo-argumento-invalido","title":"Tipo de argumento inválido","status":400,"detail":"Parâmetro inválido [data: xx] ","instance":"/api/calculadora/dados-abertos/situacoes-tributarias/cbs-ibs","timestamp":"2026-11-22T00:03:42.562579Z"}

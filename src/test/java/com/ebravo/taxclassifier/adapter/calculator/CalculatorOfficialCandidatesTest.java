@@ -1,10 +1,13 @@
 package com.ebravo.taxclassifier.adapter.calculator;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.http.HttpMethod.GET;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
+import static org.springframework.http.MediaType.APPLICATION_PROBLEM_JSON;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withBadRequest;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
 import com.ebravo.taxclassifier.application.OfficialCandidates;
@@ -17,6 +20,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.restclient.test.autoconfigure.RestClientTest;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.test.web.client.MockRestServiceServer;
+import org.springframework.web.client.RestClientResponseException;
 
 /** Replays responses recorded from the official calculator at tag 1.6.1. */
 @RestClientTest(
@@ -62,6 +66,18 @@ class CalculatorOfficialCandidatesTest {
                 .andRespond(withSuccess(recorded("situacoes-tributarias-cbs-ibs-2020-01-01.json"), APPLICATION_JSON));
 
         assertThat(candidates.on(LocalDate.of(2020, 1, 1))).isEmpty();
+    }
+
+    @Test
+    void calculatorErrorIsNeverAnEmptyList() {
+        calculator.expect(requestTo(LIST_FOR_DATE + "2027-03-10"))
+                .andRespond(withBadRequest()
+                        .contentType(APPLICATION_PROBLEM_JSON)
+                        .body(recorded("situacoes-tributarias-cbs-ibs-invalid-date-400.json")));
+
+        assertThatThrownBy(() -> candidates.on(LocalDate.of(2027, 3, 10)))
+                .isInstanceOfSatisfying(RestClientResponseException.class,
+                        error -> assertThat(error.getStatusCode().value()).isEqualTo(400));
     }
 
     private static ClassPathResource recorded(String file) {
