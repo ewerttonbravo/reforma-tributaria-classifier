@@ -18,8 +18,11 @@ import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 /** Replays a Messages API response recorded from the real API, from a local stub; the real API is never called. */
 class ClaudeAiAdvisorTest {
@@ -111,6 +114,31 @@ class ClaudeAiAdvisorTest {
         response = recorded("messages-max-tokens-response.json");
 
         assertThat(failure().kind()).isEqualTo(Kind.TRUNCATED);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "200 / 200003",
+            "{\"cst\":\"200\",\"cClassTrib\":\"200003\",\"justification\":\"Alimento.\"}",
+            "{\"cst\":\"200\",\"cClassTrib\":\"200003\",\"justification\":\"Alimento.\",\"confidence\":1.5}"})
+    void malformedAnswerIsAFailure(String text) throws IOException {
+        finishedWith(JsonMapper.shared().createObjectNode().put("type", "text").put("text", text));
+
+        assertThat(failure().kind()).isEqualTo(Kind.MALFORMED);
+    }
+
+    @Test
+    void answerWithoutTextIsAFailure() throws IOException {
+        finishedWith(JsonMapper.shared().createObjectNode().put("type", "thinking").put("thinking", "").put("signature", "sig"));
+
+        assertThat(failure().kind()).isEqualTo(Kind.MALFORMED);
+    }
+
+    /** The recorded end_turn response with its content replaced by the given block. */
+    private void finishedWith(JsonNode block) throws IOException {
+        var message = (ObjectNode) JsonMapper.shared().readTree(recorded("messages-structured-response.json"));
+        message.putArray("content").add(block);
+        response = JsonMapper.shared().writeValueAsBytes(message);
     }
 
     private AiFailure failure() {
