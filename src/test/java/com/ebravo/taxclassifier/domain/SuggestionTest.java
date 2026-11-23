@@ -9,6 +9,27 @@ import org.junit.jupiter.api.Test;
 class SuggestionTest {
 
     @Test
+    void cstMustBeGiven() {
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> new Suggestion(null, "200003", BigDecimal.ONE))
+                .withMessage("cst must not be blank, was null");
+    }
+
+    @Test
+    void blankCstIsRejected() {
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> new Suggestion("  ", "200003", BigDecimal.ONE))
+                .withMessage("cst must not be blank, was '  '");
+    }
+
+    @Test
+    void cClassTribMustBeGiven() {
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> new Suggestion("200", null, BigDecimal.ONE))
+                .withMessage("cClassTrib must not be blank, was null");
+    }
+
+    @Test
     void confidenceMustBeGiven() {
         assertThatIllegalArgumentException()
                 .isThrownBy(() -> new Suggestion("200", "200003", null))
