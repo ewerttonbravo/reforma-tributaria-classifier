@@ -15,6 +15,8 @@ spring:
         spring.json.add.type.headers: false
 calculator:
   base-url: http://localhost:8080/api/calculadora
+ai:
+  base-url: https://api.anthropic.com
 logging:
   level:
     # stdout carries the command's summary only; the command reports a Kafka failure itself on stderr.

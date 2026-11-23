@@ -1,0 +1,20 @@
+{
+  "id": "msg_01StubResponse",
+  "type": "message",
+  "role": "assistant",
+  "model": "claude-haiku-5-5",
+  "content": [
+    {
+      "type": "text",
+      "text": "{\"cst\":\"200\",\"cClassTrib\":\"200003\",\"justification\":\"Feijão é alimento destinado ao consumo humano listado no Anexo I.\",\"confidence\":0.92}"
+    }
+  ],
+  "stop_reason": "end_turn",
+  "stop_sequence": null,
+  "usage": {
+    "input_tokens": 5210,
+    "output_tokens": 61,
+    "cache_creation_input_tokens": 0,
+    "cache_read_input_tokens": 0
+  }
+}

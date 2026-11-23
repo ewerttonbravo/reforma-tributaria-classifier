@@ -10,7 +10,7 @@ class VerdictTest {
 
     @Test
     void reviewAlwaysCarriesAReason() {
-        var suggestion = new Suggestion("200", "200003", BigDecimal.ONE);
+        var suggestion = new Suggestion("200", "200003", BigDecimal.ONE, "reason");
 
         assertThatNullPointerException()
                 .isThrownBy(() -> new NeedsReview(suggestion, null))
