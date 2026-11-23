@@ -1,0 +1,64 @@
+package com.ebravo.taxclassifier.adapter.ai;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import com.ebravo.taxclassifier.domain.Product;
+import com.ebravo.taxclassifier.domain.Suggestion;
+import com.ebravo.taxclassifier.domain.TaxClassification;
+import com.ebravo.taxclassifier.domain.TaxSituation;
+import com.sun.net.httpserver.HttpServer;
+import java.io.IOException;
+import java.io.InputStream;
+import java.math.BigDecimal;
+import java.net.InetSocketAddress;
+import java.util.List;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
+/** Replays a Messages API response from a local stub; the real API is never called. */
+class ClaudeAiAdvisorTest {
+
+    private static final Product BEANS = new Product("P002", "Feijão carioca 1kg", "07133319", new BigDecimal("8.49"));
+    private static final List<TaxSituation> OFFICIAL = List.of(
+            new TaxSituation("000", "Tributação integral", List.of(
+                    new TaxClassification("000001", "Situações tributadas integralmente pelo IBS e CBS."))),
+            new TaxSituation("200", "Alíquota reduzida", List.of(
+                    new TaxClassification("200003", "Vendas de produtos destinados à alimentação humana (Anexo I)"))));
+
+    private HttpServer claude;
+    private ClaudeAiAdvisor advisor;
+
+    @BeforeEach
+    void startStub() throws IOException {
+        claude = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
+        claude.createContext("/v1/messages", exchange -> {
+            byte[] body = recorded("messages-structured-response.json");
+            exchange.getResponseHeaders().add("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, body.length);
+            exchange.getResponseBody().write(body);
+            exchange.close();
+        });
+        claude.start();
+        advisor = new ClaudeAiAdvisor("http://localhost:" + claude.getAddress().getPort(), "test-key");
+    }
+
+    @AfterEach
+    void stopStub() {
+        claude.stop(0);
+    }
+
+    @Test
+    void answerBecomesSuggestion() {
+        var suggestion = advisor.suggest(BEANS, OFFICIAL);
+
+        assertThat(suggestion).isEqualTo(new Suggestion("200", "200003", new BigDecimal("0.92"),
+                "Feijão é alimento destinado ao consumo humano listado no Anexo I."));
+    }
+
+    private static byte[] recorded(String file) throws IOException {
+        try (InputStream in = ClaudeAiAdvisorTest.class.getResourceAsStream("/claude/" + file)) {
+            return in.readAllBytes();
+        }
+    }
+}
