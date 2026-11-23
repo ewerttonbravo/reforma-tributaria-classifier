@@ -1,6 +1,6 @@
 # Roadmap
 
-Approved by the maintainer on 2026-11-20; task 03 split into 03a and 03b on 2026-11-21 to stay under the size gate. The unit of work is the task: one observable behavior, one small PR.
+Approved by the maintainer on 2026-11-20; task 03 split into 03a and 03b on 2026-11-21 to stay under the size gate; task 06 split into 06a, 06b and 06c on 2026-11-23, for size and because the legal basis comes from the calculator, not the AI. The unit of work is the task: one observable behavior, one small PR.
 
 ## Frame of every task
 **Elucidate**, before any code:
@@ -30,8 +30,10 @@ Approved by the maintainer on 2026-11-20; task 03 split into 03a and 03b on 2026
 | 03b | Publish command | `compose.yaml` with Kafka in KRaft mode; 1 command reads the CSV file (UTF-8, BOM removed), publishes the valid lines, prints each rejected line with its number and reason to stderr and exits with 1 if any line was rejected; sample CSV | 03a |
 | 04 | Official candidates | Port + HTTP adapter: given a date, returns the official CBS/IBS list of CST / `cClassTrib` (the calculator has no list per NCM, see design D5); contract test with the fixtures from 01 | 01 |
 | 05 | Validate AI suggestion | Domain: a suggestion outside the list or below the confidence threshold → review with a reason; inside → accepted | 00 |
-| 06 | Claude adapter | Port + `claude-haiku-5-5` adapter with structured JSON output; contract via HTTP stub; manual checklist with the real key | 05 |
-| 07 | Classification consumer | Consumes `produtos` and publishes to `produtos-classificados` or `produtos-revisao` (Testcontainers + fakes) | 03a, 04, 06 |
+| 06a | Claude adapter | Port + `claude-haiku-5-5` adapter with structured JSON output: the answer becomes a `Suggestion` with its justification; contract via HTTP stub; manual checklist with the real key | 05 |
+| 06b | AI failures | A refusal, a truncated answer (`max_tokens`), a malformed answer or an HTTP error is a failure, never a suggestion; the SDK does not retry (retry is task 12) | 06a |
+| 06c | Official legal basis | Port + adapter: the official legal basis for a date and `cClassTrib`, from `GET /dados-abertos/fundamentacoes-legais`; contract with the fixtures from 01 | 01 |
+| 07 | Classification consumer | Consumes `produtos` and publishes to `produtos-classificados` or `produtos-revisao` (Testcontainers + fakes) | 03a, 04, 06b, 06c |
 | 08 | Calculate CBS/IBS | Port + `POST /observabilidade/regime-geral` adapter; `estadoItem` → `sealed` result; `dhFatoGerador` at `-03:00`; contract with the official examples | 01 |
 | 09 | Route by estadoItem | Classified with CBS/IBS amounts for `CALCULADO` / `CALCULO_SIMULADO`; `INCONSISTENCIA_ENTRADA` and `REG-011` → review (scenario 4) | 07, 08 |
 | 10 | Manual offset commit | Offset committed only after publishing; a crash before publishing → reprocessed | 09 |
