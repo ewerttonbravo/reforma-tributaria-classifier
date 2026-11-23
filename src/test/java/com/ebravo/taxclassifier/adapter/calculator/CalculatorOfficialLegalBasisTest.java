@@ -49,6 +49,14 @@ class CalculatorOfficialLegalBasisTest {
                 "LIVRO I \\n\\nDO IMPOSTO SOBRE BENS E SERVIÇOS (IBS) E DA CONTRIBUIÇÃO SOCIAL SOBRE BENS E SERVIÇOS (CBS) \\n\\nTÍTULO I \\n\\nDAS NORMAS GERAIS DO IBS E DA CBS \\n\\nCAPÍTULO II\\n\\nDO IBS E DA CBS SOBRE OPERAÇÕES COM BENS E SERVIÇOS\\n\\nSeção IV\\n\\nDo Local da Operação"));
     }
 
+    /** 220001 is in the official list for the date, but the calculator publishes no legal basis for it. */
+    @Test
+    void classificationWithNoOfficialLegalBasisHasNone() {
+        calculator.expect(requestTo(BASES_FOR_DATE)).andRespond(withSuccess(recorded(), APPLICATION_JSON));
+
+        assertThat(legalBasis.of("220001", DATE)).isEmpty();
+    }
+
     private static ClassPathResource recorded() {
         return new ClassPathResource("calculator/1.6.1/fundamentacoes-legais-2027-03-10.json");
     }
