@@ -81,11 +81,14 @@ class ClaudeAiAdvisor implements AiAdvisor, AutoCloseable {
 
     /** Only end_turn is a finished answer: the request has no tools and no stop sequences. */
     private static void requireFinished(StructuredMessage<Answer> response) {
-        var stop = response.stopReason().map(StopReason::value).orElse(StopReason.Value._UNKNOWN);
-        switch (stop) {
+        var stop = response.stopReason();
+        switch (stop.map(StopReason::value).orElse(StopReason.Value._UNKNOWN)) {
             case END_TURN -> {}
             case REFUSAL -> throw new AiFailure(Kind.REFUSED, "the AI refused to answer", null);
-            default -> throw new AiFailure(Kind.TRUNCATED, "the answer did not finish, stop reason " + stop, null);
+            case MAX_TOKENS, MODEL_CONTEXT_WINDOW_EXCEEDED ->
+                    throw new AiFailure(Kind.TRUNCATED, "the answer was cut short at " + stop.get(), null);
+            default -> throw new AiFailure(Kind.MALFORMED, "the answer stopped for an unexpected reason: "
+                    + stop.map(StopReason::toString).orElse("none"), null);
         }
     }
 
