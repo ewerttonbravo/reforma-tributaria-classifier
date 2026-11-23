@@ -51,6 +51,7 @@ class ClaudeAiAdvisorTest {
 
     @AfterEach
     void stopStub() {
+        advisor.close();
         claude.stop(0);
     }
 
