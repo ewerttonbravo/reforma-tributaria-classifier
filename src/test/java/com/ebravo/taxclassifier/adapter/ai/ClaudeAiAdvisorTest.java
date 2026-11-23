@@ -15,6 +15,8 @@ import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
 
 /** Replays a Messages API response from a local stub; the real API is never called. */
 class ClaudeAiAdvisorTest {
@@ -28,11 +30,15 @@ class ClaudeAiAdvisorTest {
 
     private HttpServer claude;
     private ClaudeAiAdvisor advisor;
+    private JsonNode request;
+    private String authorization;
 
     @BeforeEach
     void startStub() throws IOException {
         claude = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
         claude.createContext("/v1/messages", exchange -> {
+            request = JsonMapper.shared().readTree(exchange.getRequestBody());
+            authorization = exchange.getRequestHeaders().getFirst("Authorization");
             byte[] body = recorded("messages-structured-response.json");
             exchange.getResponseHeaders().add("Content-Type", "application/json");
             exchange.sendResponseHeaders(200, body.length);
@@ -54,6 +60,24 @@ class ClaudeAiAdvisorTest {
 
         assertThat(suggestion).isEqualTo(new Suggestion("200", "200003", new BigDecimal("0.92"),
                 "Feijão é alimento destinado ao consumo humano listado no Anexo I."));
+    }
+
+    @Test
+    void requestCarriesModelOfficialListAndProduct() {
+        advisor.suggest(BEANS, OFFICIAL);
+
+        assertThat(authorization).isEqualTo("Bearer test-key");
+        assertThat(request.path("model").asString()).isEqualTo("claude-haiku-5-5");
+        assertThat(request.path("output_config").path("effort").asString()).isEqualTo("medium");
+        assertThat(request.path("output_config").path("format").path("type").asString()).isEqualTo("json_schema");
+        var system = request.path("system").path(0);
+        assertThat(system.path("cache_control").path("type").asString()).isEqualTo("ephemeral");
+        assertThat(system.path("text").asString())
+                .contains("000 Tributação integral / 000001 Situações tributadas integralmente pelo IBS e CBS.")
+                .contains("200 Alíquota reduzida / 200003 Vendas de produtos destinados à alimentação humana (Anexo I)");
+        assertThat(request.path("messages").path(0).path("content").asString())
+                .contains("Feijão carioca 1kg", "07133319")
+                .doesNotContain("P002", "8.49");
     }
 
     private static byte[] recorded(String file) throws IOException {
