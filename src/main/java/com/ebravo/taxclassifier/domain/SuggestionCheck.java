@@ -18,6 +18,9 @@ public final class SuggestionCheck {
         if (!isOfficial(suggestion, official)) {
             return new NeedsReview(suggestion, ReviewReason.OUTSIDE_OFFICIAL_LIST);
         }
+        if (suggestion.confidence().compareTo(threshold) < 0) {
+            return new NeedsReview(suggestion, ReviewReason.LOW_CONFIDENCE);
+        }
         return new Accepted(suggestion);
     }
 
