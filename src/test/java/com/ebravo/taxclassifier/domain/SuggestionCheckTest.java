@@ -21,14 +21,14 @@ class SuggestionCheckTest {
 
     @Test
     void suggestionInsideOfficialListIsAccepted() {
-        var suggestion = new Suggestion("200", "200003", new BigDecimal("0.95"));
+        var suggestion = new Suggestion("200", "200003", new BigDecimal("0.95"), "reason");
 
         assertThat(check.check(suggestion, OFFICIAL)).isEqualTo(new Accepted(suggestion));
     }
 
     @Test
     void unknownCstGoesToReview() {
-        var suggestion = new Suggestion("999", "999001", new BigDecimal("0.95"));
+        var suggestion = new Suggestion("999", "999001", new BigDecimal("0.95"), "reason");
 
         assertThat(check.check(suggestion, OFFICIAL))
                 .isEqualTo(new NeedsReview(suggestion, ReviewReason.OUTSIDE_OFFICIAL_LIST));
@@ -36,7 +36,7 @@ class SuggestionCheckTest {
 
     @Test
     void cClassTribUnderAnotherCstGoesToReview() {
-        var suggestion = new Suggestion("000", "200003", new BigDecimal("0.95"));
+        var suggestion = new Suggestion("000", "200003", new BigDecimal("0.95"), "reason");
 
         assertThat(check.check(suggestion, OFFICIAL))
                 .isEqualTo(new NeedsReview(suggestion, ReviewReason.OUTSIDE_OFFICIAL_LIST));
@@ -44,7 +44,7 @@ class SuggestionCheckTest {
 
     @Test
     void emptyOfficialListSendsEverySuggestionToReview() {
-        var suggestion = new Suggestion("000", "000001", new BigDecimal("0.95"));
+        var suggestion = new Suggestion("000", "000001", new BigDecimal("0.95"), "reason");
 
         assertThat(check.check(suggestion, List.of()))
                 .isEqualTo(new NeedsReview(suggestion, ReviewReason.OUTSIDE_OFFICIAL_LIST));
@@ -52,7 +52,7 @@ class SuggestionCheckTest {
 
     @Test
     void confidenceJustBelowThresholdGoesToReview() {
-        var suggestion = new Suggestion("200", "200003", new BigDecimal("0.79"));
+        var suggestion = new Suggestion("200", "200003", new BigDecimal("0.79"), "reason");
 
         assertThat(check.check(suggestion, OFFICIAL))
                 .isEqualTo(new NeedsReview(suggestion, ReviewReason.LOW_CONFIDENCE));
@@ -60,28 +60,28 @@ class SuggestionCheckTest {
 
     @Test
     void confidenceAtThresholdIsAccepted() {
-        var suggestion = new Suggestion("200", "200003", new BigDecimal("0.80"));
+        var suggestion = new Suggestion("200", "200003", new BigDecimal("0.80"), "reason");
 
         assertThat(check.check(suggestion, OFFICIAL)).isEqualTo(new Accepted(suggestion));
     }
 
     @Test
     void confidenceJustAboveThresholdIsAccepted() {
-        var suggestion = new Suggestion("200", "200003", new BigDecimal("0.81"));
+        var suggestion = new Suggestion("200", "200003", new BigDecimal("0.81"), "reason");
 
         assertThat(check.check(suggestion, OFFICIAL)).isEqualTo(new Accepted(suggestion));
     }
 
     @Test
     void confidenceIsComparedByValueNotScale() {
-        var suggestion = new Suggestion("200", "200003", new BigDecimal("0.8"));
+        var suggestion = new Suggestion("200", "200003", new BigDecimal("0.8"), "reason");
 
         assertThat(check.check(suggestion, OFFICIAL)).isEqualTo(new Accepted(suggestion));
     }
 
     @Test
     void outsideOfficialListWinsOverLowConfidence() {
-        var suggestion = new Suggestion("000", "200003", new BigDecimal("0.10"));
+        var suggestion = new Suggestion("000", "200003", new BigDecimal("0.10"), "reason");
 
         assertThat(check.check(suggestion, OFFICIAL))
                 .isEqualTo(new NeedsReview(suggestion, ReviewReason.OUTSIDE_OFFICIAL_LIST));
