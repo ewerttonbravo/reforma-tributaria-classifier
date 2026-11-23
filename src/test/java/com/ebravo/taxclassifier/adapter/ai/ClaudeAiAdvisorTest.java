@@ -141,6 +141,13 @@ class ClaudeAiAdvisorTest {
     }
 
     @Test
+    void responseThatIsNotAMessageIsAFailure() {
+        response = "<html>Bad gateway</html>".getBytes(StandardCharsets.UTF_8);
+
+        assertThat(failure().kind()).isEqualTo(Kind.MALFORMED);
+    }
+
+    @Test
     void httpErrorIsAFailureSentOnce() {
         status = 429;
         response = """
