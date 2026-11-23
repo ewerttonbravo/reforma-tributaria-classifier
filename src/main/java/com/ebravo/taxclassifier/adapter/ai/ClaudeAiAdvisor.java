@@ -21,7 +21,8 @@ import tools.jackson.databind.json.JsonMapper;
 class ClaudeAiAdvisor implements AiAdvisor, AutoCloseable {
 
     private static final String MODEL = "claude-haiku-5-5";
-    private static final long MAX_TOKENS = 4096;
+    // Adaptive thinking spends from the same budget as the answer, so a tight cap would cut the JSON short.
+    private static final long MAX_TOKENS = 16000;
     private static final String INSTRUCTIONS = """
             You classify products for the Brazilian tax reform (CBS and IBS, LC 214/2025).
             Choose exactly one CST and one cClassTrib listed under that CST from the official list below.
@@ -29,7 +30,7 @@ class ClaudeAiAdvisor implements AiAdvisor, AutoCloseable {
             Write the justification in Brazilian Portuguese, in one or two sentences.
             Give your confidence in the choice as a number from 0 to 1.
 
-            Official list, one line per cClassTrib as "CST description / cClassTrib description":
+            Official list, one line per cClassTrib as "<CST code> <CST description> / <cClassTrib code> <cClassTrib description>":
             """;
 
     private final AnthropicClient claude;
