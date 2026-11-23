@@ -69,6 +69,14 @@ class CalculatorOfficialLegalBasisTest {
                         error -> assertThat(error.getStatusCode().value()).isEqualTo(500));
     }
 
+    /** A null code is a caller's bug, so it must not get the official answer of 220001; no request is expected. */
+    @Test
+    void nullClassificationIsAnErrorNotAMissingLegalBasis() {
+        assertThatThrownBy(() -> legalBasis.of(null, DATE))
+                .isInstanceOf(NullPointerException.class)
+                .hasMessage("cClassTrib");
+    }
+
     private static ClassPathResource recorded() {
         return new ClassPathResource("calculator/1.6.1/fundamentacoes-legais-2027-03-10.json");
     }
