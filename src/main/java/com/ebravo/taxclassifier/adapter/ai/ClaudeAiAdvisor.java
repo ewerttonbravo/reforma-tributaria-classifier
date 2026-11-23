@@ -2,6 +2,7 @@ package com.ebravo.taxclassifier.adapter.ai;
 
 import com.anthropic.client.AnthropicClient;
 import com.anthropic.client.okhttp.AnthropicOkHttpClient;
+import com.anthropic.errors.AnthropicInvalidDataException;
 import com.anthropic.models.messages.CacheControlEphemeral;
 import com.anthropic.models.messages.MessageCreateParams;
 import com.anthropic.models.messages.OutputConfig.Effort;
@@ -16,6 +17,7 @@ import com.ebravo.taxclassifier.domain.Suggestion;
 import com.ebravo.taxclassifier.domain.TaxSituation;
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.NoSuchElementException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.json.JsonMapper;
@@ -64,12 +66,16 @@ class ClaudeAiAdvisor implements AiAdvisor, AutoCloseable {
             case REFUSAL -> throw new AiFailure(Kind.REFUSED, "the AI refused to answer", null);
             default -> throw new AiFailure(Kind.TRUNCATED, "the answer did not finish, stop reason " + stop, null);
         }
-        return response.content().stream()
-                .flatMap(block -> block.text().stream())
-                .findFirst()
-                .orElseThrow()
-                .text()
-                .toSuggestion();
+        try {
+            return response.content().stream()
+                    .flatMap(block -> block.text().stream())
+                    .findFirst()
+                    .orElseThrow()
+                    .text()
+                    .toSuggestion();
+        } catch (NoSuchElementException | AnthropicInvalidDataException | IllegalArgumentException e) {
+            throw new AiFailure(Kind.MALFORMED, "the answer is not a valid suggestion", e);
+        }
     }
 
     /** Spring calls it on shutdown; it releases the client's connection pool and threads. */
