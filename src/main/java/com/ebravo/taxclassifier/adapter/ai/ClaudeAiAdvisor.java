@@ -9,6 +9,7 @@ import com.anthropic.models.messages.MessageCreateParams;
 import com.anthropic.models.messages.OutputConfig.Effort;
 import com.anthropic.models.messages.StopReason;
 import com.anthropic.models.messages.StructuredMessage;
+import com.anthropic.models.messages.StructuredMessageCreateParams;
 import com.anthropic.models.messages.StructuredOutputConfig;
 import com.anthropic.models.messages.TextBlockParam;
 import com.ebravo.taxclassifier.application.AiAdvisor;
@@ -49,7 +50,13 @@ class ClaudeAiAdvisor implements AiAdvisor, AutoCloseable {
 
     @Override
     public Suggestion suggest(Product product, List<TaxSituation> official) {
-        var params = MessageCreateParams.builder()
+        var response = send(request(product, official));
+        requireFinished(response);
+        return suggestionIn(response);
+    }
+
+    private static StructuredMessageCreateParams<Answer> request(Product product, List<TaxSituation> official) {
+        return MessageCreateParams.builder()
                 .model(MODEL)
                 .maxTokens(MAX_TOKENS)
                 .outputConfig(StructuredOutputConfig.<Answer>builder().effort(Effort.MEDIUM).format(Answer.class).build())
@@ -60,19 +67,27 @@ class ClaudeAiAdvisor implements AiAdvisor, AutoCloseable {
                         .build()))
                 .addUserMessage(JsonMapper.shared().writeValueAsString(new ProductData(product.description(), product.ncm())))
                 .build();
-        StructuredMessage<Answer> response;
+    }
+
+    private StructuredMessage<Answer> send(StructuredMessageCreateParams<Answer> request) {
         try {
-            response = claude.messages().create(params);
+            return claude.messages().create(request);
         } catch (AnthropicServiceException e) {
             throw new AiFailure(e.statusCode(), e);
         }
-        // Only end_turn is a finished answer: the request has no tools and no stop sequences.
+    }
+
+    /** Only end_turn is a finished answer: the request has no tools and no stop sequences. */
+    private static void requireFinished(StructuredMessage<Answer> response) {
         var stop = response.stopReason().map(StopReason::value).orElse(StopReason.Value._UNKNOWN);
         switch (stop) {
             case END_TURN -> {}
             case REFUSAL -> throw new AiFailure(Kind.REFUSED, "the AI refused to answer", null);
             default -> throw new AiFailure(Kind.TRUNCATED, "the answer did not finish, stop reason " + stop, null);
         }
+    }
+
+    private static Suggestion suggestionIn(StructuredMessage<Answer> response) {
         try {
             return response.content().stream()
                     .flatMap(block -> block.text().stream())

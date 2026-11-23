@@ -7,6 +7,10 @@ import java.util.List;
 
 public interface AiAdvisor {
 
-    /** The CST and cClassTrib the AI chooses for the product from the official list; throws if no suggestion can be read. */
+    /**
+     * The CST and cClassTrib the AI chooses for the product from the official list.
+     *
+     * @throws AiFailure if the AI refuses, its answer is cut short or malformed, or the call fails with an HTTP error
+     */
     Suggestion suggest(Product product, List<TaxSituation> official);
 }
