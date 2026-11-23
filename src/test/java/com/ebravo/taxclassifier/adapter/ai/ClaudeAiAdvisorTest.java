@@ -122,6 +122,25 @@ class ClaudeAiAdvisorTest {
         assertThat(failure().kind()).isEqualTo(Kind.TRUNCATED);
     }
 
+    @Test
+    void contextWindowExceededIsTruncated() throws IOException {
+        stoppedAt("model_context_window_exceeded");
+
+        assertThat(failure().kind()).isEqualTo(Kind.TRUNCATED);
+    }
+
+    /** The recorded answer is complete, so only the stop reason can fail it. */
+    @ParameterizedTest
+    @ValueSource(strings = {"stop_sequence", "tool_use", "pause_turn", "a_reason_added_later"})
+    void unexpectedStopReasonIsAFailure(String stopReason) throws IOException {
+        stoppedAt(stopReason);
+
+        var failure = failure();
+
+        assertThat(failure.kind()).isEqualTo(Kind.MALFORMED);
+        assertThat(failure).hasMessageEndingWith(stopReason);
+    }
+
     @ParameterizedTest
     @ValueSource(strings = {
             "200 / 200003",
@@ -165,6 +184,13 @@ class ClaudeAiAdvisorTest {
     private void finishedWith(JsonNode block) throws IOException {
         var message = (ObjectNode) JsonMapper.shared().readTree(recorded("messages-structured-response.json"));
         message.putArray("content").add(block);
+        response = JsonMapper.shared().writeValueAsBytes(message);
+    }
+
+    /** The recorded end_turn response with another stop reason. */
+    private void stoppedAt(String stopReason) throws IOException {
+        var message = (ObjectNode) JsonMapper.shared().readTree(recorded("messages-structured-response.json"));
+        message.put("stop_reason", stopReason);
         response = JsonMapper.shared().writeValueAsBytes(message);
     }
 
