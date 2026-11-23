@@ -14,7 +14,9 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.math.BigDecimal;
 import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -39,20 +41,24 @@ class ClaudeAiAdvisorTest {
     // Written on the stub's thread, read on the test's.
     private volatile JsonNode request;
     private volatile String authorization;
+    private volatile int status;
     private volatile byte[] response;
+    private final AtomicInteger requests = new AtomicInteger();
 
     @BeforeEach
     void startStub() throws IOException {
         claude = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
         claude.createContext("/v1/messages", exchange -> {
+            requests.incrementAndGet();
             request = JsonMapper.shared().readTree(exchange.getRequestBody());
             authorization = exchange.getRequestHeaders().getFirst("Authorization");
             exchange.getResponseHeaders().add("Content-Type", "application/json");
-            exchange.sendResponseHeaders(200, response.length);
+            exchange.sendResponseHeaders(status, response.length);
             exchange.getResponseBody().write(response);
             exchange.close();
         });
         claude.start();
+        status = 200;
         response = recorded("messages-structured-response.json");
         advisor = new ClaudeAiAdvisor("http://localhost:" + claude.getAddress().getPort(), "test-key");
     }
@@ -132,6 +138,20 @@ class ClaudeAiAdvisorTest {
         finishedWith(JsonMapper.shared().createObjectNode().put("type", "thinking").put("thinking", "").put("signature", "sig"));
 
         assertThat(failure().kind()).isEqualTo(Kind.MALFORMED);
+    }
+
+    @Test
+    void httpErrorIsAFailureSentOnce() {
+        status = 429;
+        response = """
+                {"type":"error","error":{"type":"rate_limit_error","message":"Number of request tokens has exceeded your per-minute rate limit"},"request_id":"req_hand_written"}
+                """.getBytes(StandardCharsets.UTF_8);
+
+        var failure = failure();
+
+        assertThat(failure.kind()).isEqualTo(Kind.HTTP_ERROR);
+        assertThat(failure.status()).hasValue(429);
+        assertThat(requests).hasValue(1);
     }
 
     /** The recorded end_turn response with its content replaced by the given block. */
