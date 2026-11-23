@@ -2,17 +2,25 @@ package com.ebravo.taxclassifier.adapter.ai;
 
 import com.anthropic.client.AnthropicClient;
 import com.anthropic.client.okhttp.AnthropicOkHttpClient;
+import com.anthropic.errors.AnthropicInvalidDataException;
+import com.anthropic.errors.AnthropicServiceException;
 import com.anthropic.models.messages.CacheControlEphemeral;
 import com.anthropic.models.messages.MessageCreateParams;
 import com.anthropic.models.messages.OutputConfig.Effort;
+import com.anthropic.models.messages.StopReason;
+import com.anthropic.models.messages.StructuredMessage;
+import com.anthropic.models.messages.StructuredMessageCreateParams;
 import com.anthropic.models.messages.StructuredOutputConfig;
 import com.anthropic.models.messages.TextBlockParam;
 import com.ebravo.taxclassifier.application.AiAdvisor;
+import com.ebravo.taxclassifier.application.AiFailure;
+import com.ebravo.taxclassifier.application.AiFailure.Kind;
 import com.ebravo.taxclassifier.domain.Product;
 import com.ebravo.taxclassifier.domain.Suggestion;
 import com.ebravo.taxclassifier.domain.TaxSituation;
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.NoSuchElementException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.json.JsonMapper;
@@ -42,7 +50,13 @@ class ClaudeAiAdvisor implements AiAdvisor, AutoCloseable {
 
     @Override
     public Suggestion suggest(Product product, List<TaxSituation> official) {
-        var params = MessageCreateParams.builder()
+        var response = send(request(product, official));
+        requireFinished(response);
+        return suggestionIn(response);
+    }
+
+    private static StructuredMessageCreateParams<Answer> request(Product product, List<TaxSituation> official) {
+        return MessageCreateParams.builder()
                 .model(MODEL)
                 .maxTokens(MAX_TOKENS)
                 .outputConfig(StructuredOutputConfig.<Answer>builder().effort(Effort.MEDIUM).format(Answer.class).build())
@@ -53,12 +67,42 @@ class ClaudeAiAdvisor implements AiAdvisor, AutoCloseable {
                         .build()))
                 .addUserMessage(JsonMapper.shared().writeValueAsString(new ProductData(product.description(), product.ncm())))
                 .build();
-        return claude.messages().create(params).content().stream()
-                .flatMap(block -> block.text().stream())
-                .findFirst()
-                .orElseThrow()
-                .text()
-                .toSuggestion();
+    }
+
+    private StructuredMessage<Answer> send(StructuredMessageCreateParams<Answer> request) {
+        try {
+            return claude.messages().create(request);
+        } catch (AnthropicServiceException e) {
+            throw new AiFailure(e.statusCode(), e);
+        } catch (AnthropicInvalidDataException e) {
+            throw new AiFailure(Kind.MALFORMED, "the response is not a message", e);
+        }
+    }
+
+    /** Only end_turn is a finished answer: the request has no tools and no stop sequences. */
+    private static void requireFinished(StructuredMessage<Answer> response) {
+        var stop = response.stopReason();
+        switch (stop.map(StopReason::value).orElse(StopReason.Value._UNKNOWN)) {
+            case END_TURN -> {}
+            case REFUSAL -> throw new AiFailure(Kind.REFUSED, "the AI refused to answer", null);
+            case MAX_TOKENS, MODEL_CONTEXT_WINDOW_EXCEEDED ->
+                    throw new AiFailure(Kind.TRUNCATED, "the answer was cut short at " + stop.get(), null);
+            default -> throw new AiFailure(Kind.MALFORMED, "the answer stopped for an unexpected reason: "
+                    + stop.map(StopReason::toString).orElse("none"), null);
+        }
+    }
+
+    private static Suggestion suggestionIn(StructuredMessage<Answer> response) {
+        try {
+            return response.content().stream()
+                    .flatMap(block -> block.text().stream())
+                    .findFirst()
+                    .orElseThrow()
+                    .text()
+                    .toSuggestion();
+        } catch (NoSuchElementException | AnthropicInvalidDataException | IllegalArgumentException e) {
+            throw new AiFailure(Kind.MALFORMED, "the answer is not a valid suggestion", e);
+        }
     }
 
     /** Spring calls it on shutdown; it releases the client's connection pool and threads. */

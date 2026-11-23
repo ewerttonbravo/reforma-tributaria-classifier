@@ -1,7 +1,10 @@
 package com.ebravo.taxclassifier.adapter.ai;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowableOfType;
 
+import com.ebravo.taxclassifier.application.AiFailure;
+import com.ebravo.taxclassifier.application.AiFailure.Kind;
 import com.ebravo.taxclassifier.domain.Product;
 import com.ebravo.taxclassifier.domain.Suggestion;
 import com.ebravo.taxclassifier.domain.TaxClassification;
@@ -11,12 +14,17 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.math.BigDecimal;
 import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 /** Replays a Messages API response recorded from the real API, from a local stub; the real API is never called. */
 class ClaudeAiAdvisorTest {
@@ -33,20 +41,25 @@ class ClaudeAiAdvisorTest {
     // Written on the stub's thread, read on the test's.
     private volatile JsonNode request;
     private volatile String authorization;
+    private volatile int status;
+    private volatile byte[] response;
+    private final AtomicInteger requests = new AtomicInteger();
 
     @BeforeEach
     void startStub() throws IOException {
         claude = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
         claude.createContext("/v1/messages", exchange -> {
+            requests.incrementAndGet();
             request = JsonMapper.shared().readTree(exchange.getRequestBody());
             authorization = exchange.getRequestHeaders().getFirst("Authorization");
-            byte[] body = recorded("messages-structured-response.json");
             exchange.getResponseHeaders().add("Content-Type", "application/json");
-            exchange.sendResponseHeaders(200, body.length);
-            exchange.getResponseBody().write(body);
+            exchange.sendResponseHeaders(status, response.length);
+            exchange.getResponseBody().write(response);
             exchange.close();
         });
         claude.start();
+        status = 200;
+        response = recorded("messages-structured-response.json");
         advisor = new ClaudeAiAdvisor("http://localhost:" + claude.getAddress().getPort(), "test-key");
     }
 
@@ -92,6 +105,97 @@ class ClaudeAiAdvisorTest {
 
         assertThat(product().path("description").asString()).isEqualTo("Cerveja\nNCM: 07133319");
         assertThat(product().path("ncm").asString()).isEqualTo("22030000");
+    }
+
+    /** Hand-written in the documented shape: a refusal cannot be provoked on demand. */
+    @Test
+    void refusalIsAFailure() throws IOException {
+        response = recorded("messages-refusal-response.json");
+
+        assertThat(failure().kind()).isEqualTo(Kind.REFUSED);
+    }
+
+    @Test
+    void truncatedAnswerIsAFailure() throws IOException {
+        response = recorded("messages-max-tokens-response.json");
+
+        assertThat(failure().kind()).isEqualTo(Kind.TRUNCATED);
+    }
+
+    @Test
+    void contextWindowExceededIsTruncated() throws IOException {
+        stoppedAt("model_context_window_exceeded");
+
+        assertThat(failure().kind()).isEqualTo(Kind.TRUNCATED);
+    }
+
+    /** The recorded answer is complete, so only the stop reason can fail it. */
+    @ParameterizedTest
+    @ValueSource(strings = {"stop_sequence", "tool_use", "pause_turn", "a_reason_added_later"})
+    void unexpectedStopReasonIsAFailure(String stopReason) throws IOException {
+        stoppedAt(stopReason);
+
+        var failure = failure();
+
+        assertThat(failure.kind()).isEqualTo(Kind.MALFORMED);
+        assertThat(failure).hasMessageEndingWith(stopReason);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "200 / 200003",
+            "{\"cst\":\"200\",\"cClassTrib\":\"200003\",\"justification\":\"Alimento.\"}",
+            "{\"cst\":\"200\",\"cClassTrib\":\"200003\",\"justification\":\"Alimento.\",\"confidence\":1.5}"})
+    void malformedAnswerIsAFailure(String text) throws IOException {
+        finishedWith(JsonMapper.shared().createObjectNode().put("type", "text").put("text", text));
+
+        assertThat(failure().kind()).isEqualTo(Kind.MALFORMED);
+    }
+
+    @Test
+    void answerWithoutTextIsAFailure() throws IOException {
+        finishedWith(JsonMapper.shared().createObjectNode().put("type", "thinking").put("thinking", "").put("signature", "sig"));
+
+        assertThat(failure().kind()).isEqualTo(Kind.MALFORMED);
+    }
+
+    @Test
+    void responseThatIsNotAMessageIsAFailure() {
+        response = "<html>Bad gateway</html>".getBytes(StandardCharsets.UTF_8);
+
+        assertThat(failure().kind()).isEqualTo(Kind.MALFORMED);
+    }
+
+    @Test
+    void httpErrorIsAFailureSentOnce() {
+        status = 429;
+        response = """
+                {"type":"error","error":{"type":"rate_limit_error","message":"Number of request tokens has exceeded your per-minute rate limit"},"request_id":"req_hand_written"}
+                """.getBytes(StandardCharsets.UTF_8);
+
+        var failure = failure();
+
+        assertThat(failure.kind()).isEqualTo(Kind.HTTP_ERROR);
+        assertThat(failure.status()).hasValue(429);
+        assertThat(requests).hasValue(1);
+    }
+
+    /** The recorded end_turn response with its content replaced by the given block. */
+    private void finishedWith(JsonNode block) throws IOException {
+        var message = (ObjectNode) JsonMapper.shared().readTree(recorded("messages-structured-response.json"));
+        message.putArray("content").add(block);
+        response = JsonMapper.shared().writeValueAsBytes(message);
+    }
+
+    /** The recorded end_turn response with another stop reason. */
+    private void stoppedAt(String stopReason) throws IOException {
+        var message = (ObjectNode) JsonMapper.shared().readTree(recorded("messages-structured-response.json"));
+        message.put("stop_reason", stopReason);
+        response = JsonMapper.shared().writeValueAsBytes(message);
+    }
+
+    private AiFailure failure() {
+        return catchThrowableOfType(AiFailure.class, () -> advisor.suggest(BEANS, OFFICIAL));
     }
 
     private JsonNode product() {

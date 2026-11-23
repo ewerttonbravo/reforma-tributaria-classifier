@@ -1,0 +1,1 @@
+{"model":"claude-haiku-5-5","id":"msg_hand_written_refusal","type":"message","role":"assistant","content":[],"container":null,"stop_reason":"refusal","stop_sequence":null,"stop_details":{"type":"refusal","category":null,"explanation":null},"usage":{"input_tokens":33,"cache_creation_input_tokens":0,"cache_read_input_tokens":7744,"output_tokens":0,"service_tier":"standard"}}
