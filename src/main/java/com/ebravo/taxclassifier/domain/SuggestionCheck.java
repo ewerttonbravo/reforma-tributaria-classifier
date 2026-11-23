@@ -10,8 +10,9 @@ public final class SuggestionCheck {
 
     private final BigDecimal threshold;
 
+    /** The threshold is the lowest confidence accepted, from 0 to 1. */
     public SuggestionCheck(BigDecimal threshold) {
-        this.threshold = threshold;
+        this.threshold = UnitInterval.require(threshold, "threshold");
     }
 
     public Verdict check(Suggestion suggestion, List<TaxSituation> official) {
