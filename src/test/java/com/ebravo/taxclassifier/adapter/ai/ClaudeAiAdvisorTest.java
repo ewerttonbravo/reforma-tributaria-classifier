@@ -18,7 +18,7 @@ import org.junit.jupiter.api.Test;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
-/** Replays a Messages API response from a local stub; the real API is never called. */
+/** Replays a Messages API response recorded from the real API, from a local stub; the real API is never called. */
 class ClaudeAiAdvisorTest {
 
     private static final Product BEANS = new Product("P002", "Feijão carioca 1kg", "07133319", new BigDecimal("8.49"));
@@ -60,8 +60,10 @@ class ClaudeAiAdvisorTest {
     void answerBecomesSuggestion() {
         var suggestion = advisor.suggest(BEANS, OFFICIAL);
 
-        assertThat(suggestion).isEqualTo(new Suggestion("200", "200003", new BigDecimal("0.92"),
-                "Feijão é alimento destinado ao consumo humano listado no Anexo I."));
+        assertThat(suggestion).isEqualTo(new Suggestion("200", "200003", new BigDecimal("0.9"),
+                "Feijão carioca (NCM 0713.33.19) é alimento básico da cesta básica nacional, previsto no Anexo I"
+                        + " da LC 214/2025, por isso enquadra-se em venda de produto destinado à alimentação humana"
+                        + " com alíquota reduzida (zero)."));
     }
 
     @Test
