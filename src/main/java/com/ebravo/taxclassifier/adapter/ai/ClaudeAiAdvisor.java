@@ -3,10 +3,12 @@ package com.ebravo.taxclassifier.adapter.ai;
 import com.anthropic.client.AnthropicClient;
 import com.anthropic.client.okhttp.AnthropicOkHttpClient;
 import com.anthropic.errors.AnthropicInvalidDataException;
+import com.anthropic.errors.AnthropicServiceException;
 import com.anthropic.models.messages.CacheControlEphemeral;
 import com.anthropic.models.messages.MessageCreateParams;
 import com.anthropic.models.messages.OutputConfig.Effort;
 import com.anthropic.models.messages.StopReason;
+import com.anthropic.models.messages.StructuredMessage;
 import com.anthropic.models.messages.StructuredOutputConfig;
 import com.anthropic.models.messages.TextBlockParam;
 import com.ebravo.taxclassifier.application.AiAdvisor;
@@ -58,7 +60,12 @@ class ClaudeAiAdvisor implements AiAdvisor, AutoCloseable {
                         .build()))
                 .addUserMessage(JsonMapper.shared().writeValueAsString(new ProductData(product.description(), product.ncm())))
                 .build();
-        var response = claude.messages().create(params);
+        StructuredMessage<Answer> response;
+        try {
+            response = claude.messages().create(params);
+        } catch (AnthropicServiceException e) {
+            throw new AiFailure(e.statusCode(), e);
+        }
         // Only end_turn is a finished answer: the request has no tools and no stop sequences.
         var stop = response.stopReason().map(StopReason::value).orElse(StopReason.Value._UNKNOWN);
         switch (stop) {
