@@ -4,6 +4,7 @@ import com.ebravo.taxclassifier.application.OfficialLegalBasis;
 import com.ebravo.taxclassifier.domain.LegalBasis;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
@@ -22,6 +23,7 @@ class CalculatorOfficialLegalBasis implements OfficialLegalBasis {
     /** Release 1.6.1 lists the legal bases by date only, so the cClassTrib is picked here. */
     @Override
     public Optional<LegalBasis> of(String cClassTrib, LocalDate date) {
+        Objects.requireNonNull(cClassTrib, "cClassTrib");
         return calculator.get()
                 .uri("/dados-abertos/fundamentacoes-legais?data={date}", date)
                 .retrieve()
