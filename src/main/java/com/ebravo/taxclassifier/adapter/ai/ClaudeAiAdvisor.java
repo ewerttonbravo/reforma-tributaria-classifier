@@ -74,6 +74,8 @@ class ClaudeAiAdvisor implements AiAdvisor, AutoCloseable {
             return claude.messages().create(request);
         } catch (AnthropicServiceException e) {
             throw new AiFailure(e.statusCode(), e);
+        } catch (AnthropicInvalidDataException e) {
+            throw new AiFailure(Kind.MALFORMED, "the response is not a message", e);
         }
     }
 
