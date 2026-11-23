@@ -57,7 +57,10 @@ class CalculatorOfficialLegalBasisTest {
     void classificationWithNoOfficialLegalBasisHasNone() {
         calculator.expect(requestTo(BASES_FOR_DATE)).andRespond(withSuccess(recorded(), APPLICATION_JSON));
 
-        assertThat(legalBasis.of("220001", DATE)).isEmpty();
+        var basis = legalBasis.of("220001", DATE);
+
+        calculator.verify();
+        assertThat(basis).isEmpty();
     }
 
     @Test
