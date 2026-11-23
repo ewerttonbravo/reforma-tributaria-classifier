@@ -1,10 +1,12 @@
 package com.ebravo.taxclassifier.adapter.calculator;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.http.HttpMethod.GET;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withServerError;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
 import com.ebravo.taxclassifier.application.OfficialLegalBasis;
@@ -15,6 +17,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.restclient.test.autoconfigure.RestClientTest;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.test.web.client.MockRestServiceServer;
+import org.springframework.web.client.RestClientResponseException;
 
 /** Replays the legal bases recorded from the official calculator at tag 1.6.1 for 2027-03-10. */
 @RestClientTest(
@@ -55,6 +58,15 @@ class CalculatorOfficialLegalBasisTest {
         calculator.expect(requestTo(BASES_FOR_DATE)).andRespond(withSuccess(recorded(), APPLICATION_JSON));
 
         assertThat(legalBasis.of("220001", DATE)).isEmpty();
+    }
+
+    @Test
+    void calculatorErrorIsNeverAMissingLegalBasis() {
+        calculator.expect(requestTo(BASES_FOR_DATE)).andRespond(withServerError());
+
+        assertThatThrownBy(() -> legalBasis.of("000002", DATE))
+                .isInstanceOfSatisfying(RestClientResponseException.class,
+                        error -> assertThat(error.getStatusCode().value()).isEqualTo(500));
     }
 
     private static ClassPathResource recorded() {
