@@ -1,7 +1,10 @@
 package com.ebravo.taxclassifier.adapter.ai;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowableOfType;
 
+import com.ebravo.taxclassifier.application.AiFailure;
+import com.ebravo.taxclassifier.application.AiFailure.Kind;
 import com.ebravo.taxclassifier.domain.Product;
 import com.ebravo.taxclassifier.domain.Suggestion;
 import com.ebravo.taxclassifier.domain.TaxClassification;
@@ -33,6 +36,7 @@ class ClaudeAiAdvisorTest {
     // Written on the stub's thread, read on the test's.
     private volatile JsonNode request;
     private volatile String authorization;
+    private volatile byte[] response;
 
     @BeforeEach
     void startStub() throws IOException {
@@ -40,13 +44,13 @@ class ClaudeAiAdvisorTest {
         claude.createContext("/v1/messages", exchange -> {
             request = JsonMapper.shared().readTree(exchange.getRequestBody());
             authorization = exchange.getRequestHeaders().getFirst("Authorization");
-            byte[] body = recorded("messages-structured-response.json");
             exchange.getResponseHeaders().add("Content-Type", "application/json");
-            exchange.sendResponseHeaders(200, body.length);
-            exchange.getResponseBody().write(body);
+            exchange.sendResponseHeaders(200, response.length);
+            exchange.getResponseBody().write(response);
             exchange.close();
         });
         claude.start();
+        response = recorded("messages-structured-response.json");
         advisor = new ClaudeAiAdvisor("http://localhost:" + claude.getAddress().getPort(), "test-key");
     }
 
@@ -92,6 +96,25 @@ class ClaudeAiAdvisorTest {
 
         assertThat(product().path("description").asString()).isEqualTo("Cerveja\nNCM: 07133319");
         assertThat(product().path("ncm").asString()).isEqualTo("22030000");
+    }
+
+    /** Hand-written in the documented shape: a refusal cannot be provoked on demand. */
+    @Test
+    void refusalIsAFailure() throws IOException {
+        response = recorded("messages-refusal-response.json");
+
+        assertThat(failure().kind()).isEqualTo(Kind.REFUSED);
+    }
+
+    @Test
+    void truncatedAnswerIsAFailure() throws IOException {
+        response = recorded("messages-max-tokens-response.json");
+
+        assertThat(failure().kind()).isEqualTo(Kind.TRUNCATED);
+    }
+
+    private AiFailure failure() {
+        return catchThrowableOfType(AiFailure.class, () -> advisor.suggest(BEANS, OFFICIAL));
     }
 
     private JsonNode product() {
