@@ -54,7 +54,7 @@ docker compose exec kafka /opt/kafka/bin/kafka-console-consumer.sh --bootstrap-s
 
 ## Run the official calculator
 
-The service calls the [official tax calculator](https://github.com/ReceitaFederal/calculadora-rtc-regime-regular) of the Receita Federal, pinned at tag `1.6.1` (commit `150cccb`). It runs as a separate process on port 8080; the service finds it at the `calculator.base-url` property, `http://localhost:8080/api/calculadora` by default. Tests never need it: the contract tests of tasks 04 and 08 replay its responses recorded in `src/test/resources/calculator/1.6.1/`.
+The service calls the [official tax calculator](https://github.com/ReceitaFederal/calculadora-rtc-regime-regular) of the Receita Federal, pinned at tag `1.6.1` (commit `150cccb`). It runs as a separate process on port 8080; the service finds it at the `calculator.base-url` property, `http://localhost:8080/api/calculadora` by default. Tests never need it: the contract tests of tasks 04, 06c and 08 replay its responses recorded in `src/test/resources/calculator/1.6.1/`.
 
 Clone it outside this repository and build it with JDK 25:
 
