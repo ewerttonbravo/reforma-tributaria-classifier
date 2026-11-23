@@ -1,6 +1,7 @@
 package com.ebravo.taxclassifier.domain;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 
 import com.ebravo.taxclassifier.domain.Verdict.Accepted;
 import com.ebravo.taxclassifier.domain.Verdict.NeedsReview;
@@ -84,5 +85,12 @@ class SuggestionCheckTest {
 
         assertThat(check.check(suggestion, OFFICIAL))
                 .isEqualTo(new NeedsReview(suggestion, ReviewReason.OUTSIDE_OFFICIAL_LIST));
+    }
+
+    @Test
+    void thresholdWrittenAsPercentageIsRejected() {
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> new SuggestionCheck(new BigDecimal("80")))
+                .withMessage("threshold must be between 0 and 1, was 80");
     }
 }
