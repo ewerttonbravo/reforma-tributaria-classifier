@@ -17,7 +17,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 @Component
-class ClaudeAiAdvisor implements AiAdvisor {
+class ClaudeAiAdvisor implements AiAdvisor, AutoCloseable {
 
     private static final String MODEL = "claude-haiku-5-5";
     private static final long MAX_TOKENS = 4096;
@@ -57,6 +57,12 @@ class ClaudeAiAdvisor implements AiAdvisor {
                 .orElseThrow()
                 .text()
                 .toSuggestion();
+    }
+
+    /** Spring calls it on shutdown; it releases the client's connection pool and threads. */
+    @Override
+    public void close() {
+        claude.close();
     }
 
     private static String officialList(List<TaxSituation> official) {
