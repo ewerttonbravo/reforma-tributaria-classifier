@@ -2,8 +2,11 @@ package com.ebravo.taxclassifier.application;
 
 import com.ebravo.taxclassifier.domain.Classification;
 import com.ebravo.taxclassifier.domain.Classification.Classified;
+import com.ebravo.taxclassifier.domain.Classification.ToReview;
 import com.ebravo.taxclassifier.domain.Product;
 import com.ebravo.taxclassifier.domain.SuggestionCheck;
+import com.ebravo.taxclassifier.domain.Verdict.Accepted;
+import com.ebravo.taxclassifier.domain.Verdict.NeedsReview;
 import java.time.Clock;
 import java.time.LocalDate;
 
@@ -28,7 +31,9 @@ public final class ClassifyProduct {
     public Classification classify(Product product) {
         var today = LocalDate.now(clock);
         var official = candidates.on(today);
-        var suggestion = check.check(advisor.suggest(product, official), official).suggestion();
-        return new Classified(suggestion, legalBasis.of(suggestion.cClassTrib(), today));
+        return switch (check.check(advisor.suggest(product, official), official)) {
+            case Accepted(var suggestion) -> new Classified(suggestion, legalBasis.of(suggestion.cClassTrib(), today));
+            case NeedsReview(var suggestion, var reason) -> new ToReview(suggestion, reason);
+        };
     }
 }
