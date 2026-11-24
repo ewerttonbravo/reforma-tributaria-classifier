@@ -1,6 +1,6 @@
 # Roadmap
 
-Approved by the maintainer on 2026-11-20; task 03 split into 03a and 03b on 2026-11-21 to stay under the size gate; task 06 split into 06a, 06b and 06c on 2026-11-23, for size and because the legal basis comes from the calculator, not the AI; task 07 split into 07a, 07b and 07c on 2026-11-24 to stay under the size gate. The unit of work is the task: one observable behavior, one small PR.
+Approved by the maintainer on 2026-11-20; task 03 split into 03a and 03b on 2026-11-21 to stay under the size gate; task 06 split into 06a, 06b and 06c on 2026-11-23, for size and because the legal basis comes from the calculator, not the AI; task 07 split into 07a, 07b and 07c on 2026-11-24 to stay under the size gate. Task 13 took over the malformed record on `produtos` on 2026-11-24, at the elucidation of task 07b. The unit of work is the task: one observable behavior, one small PR.
 
 ## Frame of every task
 **Elucidate**, before any code:
@@ -41,7 +41,7 @@ Approved by the maintainer on 2026-11-20; task 03 split into 03a and 03b on 2026
 | 10 | Manual offset commit | Offset committed only after publishing; a crash before publishing → reprocessed | 09 |
 | 11 | Idempotency | A duplicate message calls the AI only once (scenario 1); PostgreSQL vs H2 decided at elucidation | 10 |
 | 12 | Retry with backoff | Calculator `FALHA_TECNICA` / timeout and AI 429 retried with backoff; calculator goes down and comes back → recovers (scenario 2) | 10 |
-| 13 | Exhausted retry → review | A permanent failure goes to `produtos-revisao` with its cause (scenario 3) | 12 |
+| 13 | Exhausted retry → review | A permanent failure goes to `produtos-revisao` with its cause (scenario 3); a malformed record on `produtos` goes there too instead of being skipped | 12 |
 | 14 | Ordering per product | Two updates of the same product are processed in order (scenario 5) | 12 |
 | 15 | Rebalance | 2 instances, one killed mid-processing: nothing lost, nothing duplicated (scenario 6) | 11 |
 | 16 | End to end | `docker compose up` + calculator + 1 command process the sample CSV; README with diagram, tax-liability notice and the pinned calculator version; checks that the 5 required ADRs exist | 15, 03b |

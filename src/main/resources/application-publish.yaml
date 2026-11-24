@@ -1,0 +1,9 @@
+# The publish command: stdout carries its summary only, and it reports a Kafka failure itself on stderr.
+spring:
+  main:
+    banner-mode: off
+logging:
+  level:
+    root: warn
+    org.apache.kafka: error
+    org.springframework.kafka: off

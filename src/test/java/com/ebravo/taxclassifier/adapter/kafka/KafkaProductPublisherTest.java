@@ -2,6 +2,7 @@ package com.ebravo.taxclassifier.adapter.kafka;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.ebravo.taxclassifier.adapter.cli.PublishCommand;
 import com.ebravo.taxclassifier.application.ProductPublisher;
 import com.ebravo.taxclassifier.domain.Product;
 import java.math.BigDecimal;
@@ -23,13 +24,16 @@ import org.skyscreamer.jsonassert.JSONCompareMode;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
+import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
 import org.springframework.kafka.core.ProducerFactory;
 import org.springframework.kafka.test.utils.KafkaTestUtils;
+import org.springframework.test.context.ActiveProfiles;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.kafka.KafkaContainer;
 
 @SpringBootTest
+@ActiveProfiles(PublishCommand.PROFILE)
 @Testcontainers
 class KafkaProductPublisherTest {
 
@@ -42,6 +46,9 @@ class KafkaProductPublisherTest {
 
     @Autowired
     ProducerFactory<?, ?> producerFactory;
+
+    @Autowired
+    KafkaListenerEndpointRegistry listeners;
 
     @Test
     void eachProductIsKeyedByItsCodeWithAJsonValue() throws Exception {
@@ -84,6 +91,11 @@ class KafkaProductPublisherTest {
         assertThat(producerFactory.getConfigurationProperties())
                 .containsEntry(ProducerConfig.ACKS_CONFIG, "all")
                 .containsEntry(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true");
+    }
+
+    @Test
+    void publishProfileStartsNoConsumer() {
+        assertThat(listeners.getListenerContainers()).isEmpty();
     }
 
     /** Reads only what this call publishes: the consumer starts at the end of every partition. */

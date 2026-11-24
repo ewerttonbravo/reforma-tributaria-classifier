@@ -6,7 +6,7 @@ Suggests the CST and `cClassTrib` of each product in a catalog for Brazil's cons
 
 ## Status
 
-Skeleton, the official calculator and publishing a products CSV to Kafka: the build, the layer rules, the quality gates, the pinned calculator with its recorded responses, the CSV rules, the `produtos` topic, the publish command and reading the official CST and `cClassTrib` list from the calculator. See the [roadmap](docs/roadmap.md).
+Skeleton, the official calculator and publishing a products CSV to Kafka: the build, the layer rules, the quality gates, the pinned calculator with its recorded responses, the CSV rules, the `produtos` topic, the publish command, and the classification service: the AI chooses from the official CST and `cClassTrib` list of the calculator, and each product goes to `produtos-classificados` or to `produtos-revisao`. See the [roadmap](docs/roadmap.md).
 
 ## Build and test
 
@@ -88,3 +88,23 @@ curl -s -D - -o /dev/null -X POST "$B/observabilidade/regime-geral" -H 'Content-
 ```
 
 `cmp` prints nothing when the response matches the fixture. The 400 fixture, `situacoes-tributarias-cbs-ibs-invalid-date-400.json` (from `?data=xx`), is left out: it carries a timestamp. The headers fixture keeps only the status line (verbatim, trailing space included), the version headers and `x-warning-dados-simulados`.
+
+## Classify products
+
+With Kafka and the calculator running and products published, start the classification service with a Claude API key:
+
+```sh
+export ANTHROPIC_API_KEY=...                # every product is one paid call to claude-haiku-5-5
+java -jar target/tax-classifier.jar         # Ctrl-C to stop
+```
+
+The service consumes `produtos` as the consumer group `tax-classifier`, from the earliest offset on its first run. An accepted suggestion goes to `produtos-classificados` with the official legal basis (`null` when none is published); a suggestion outside the official list or below the confidence threshold goes to `produtos-revisao` with its reason. The threshold is 0.80; change it with `--classification.confidence-threshold=0.90`. Until retries exist (task 12), a product whose classification fails is logged and skipped, and so is a record on `produtos` that is not a product's JSON.
+
+See the results:
+
+```sh
+for topic in produtos-classificados produtos-revisao; do
+  docker compose exec kafka /opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 \
+    --topic $topic --from-beginning --timeout-ms 5000 --formatter-property print.key=true
+done
+```

@@ -1,6 +1,4 @@
 spring:
-  main:
-    banner-mode: off
   kafka:
     bootstrap-servers: localhost:9092
     admin:
@@ -13,13 +11,21 @@ spring:
         # Fail a send to an unreachable broker in 10 s instead of the default 60 s.
         max.block.ms: 10000
         spring.json.add.type.headers: false
+    consumer:
+      group-id: tax-classifier
+      # A product published before the service first starts is still classified.
+      auto-offset-reset: earliest
+      # Each record waits on the AI; a poll of 500 could outlast max.poll.interval.ms and be classified again.
+      max-poll-records: 1
+      # Hands a record that is not a product's JSON to the error handler, which skips it, instead of failing every poll.
+      value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
+      properties:
+        spring.deserializer.value.delegate.class: org.springframework.kafka.support.serializer.JacksonJsonDeserializer
+        spring.json.value.default.type: com.ebravo.taxclassifier.adapter.kafka.ProductMessage
+        spring.json.use.type.headers: false
 calculator:
   base-url: http://localhost:8080/api/calculadora
+classification:
+  confidence-threshold: 0.80
 ai:
   base-url: https://api.anthropic.com
-logging:
-  level:
-    # stdout carries the command's summary only; the command reports a Kafka failure itself on stderr.
-    root: warn
-    org.apache.kafka: error
-    org.springframework.kafka: off
