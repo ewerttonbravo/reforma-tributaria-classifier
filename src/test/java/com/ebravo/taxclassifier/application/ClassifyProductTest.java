@@ -3,8 +3,10 @@ package com.ebravo.taxclassifier.application;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.ebravo.taxclassifier.domain.Classification.Classified;
+import com.ebravo.taxclassifier.domain.Classification.ToReview;
 import com.ebravo.taxclassifier.domain.LegalBasis;
 import com.ebravo.taxclassifier.domain.Product;
+import com.ebravo.taxclassifier.domain.ReviewReason;
 import com.ebravo.taxclassifier.domain.Suggestion;
 import com.ebravo.taxclassifier.domain.SuggestionCheck;
 import com.ebravo.taxclassifier.domain.TaxClassification;
@@ -18,6 +20,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 class ClassifyProductTest {
 
@@ -44,6 +48,20 @@ class ClassifyProductTest {
 
         assertThat(classification).isEqualTo(new Classified(answer, Optional.of(BASIS_OF_200003)));
         assertThat(advised).containsExactly(PRODUCT, OFFICIAL);
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        "000, 200003, 0.95, OUTSIDE_OFFICIAL_LIST",
+        "200, 200003, 0.79, LOW_CONFIDENCE",
+    })
+    void rejectedSuggestionGoesToReviewWithItsReason(String cst, String cClassTrib, BigDecimal confidence, ReviewReason reason) {
+        answer = new Suggestion(cst, cClassTrib, confidence, "Arroz integra a cesta básica.");
+
+        var classification = classifyAt(NOON_IN_SAO_PAULO).classify(PRODUCT);
+
+        assertThat(classification).isEqualTo(new ToReview(answer, reason));
+        assertThat(legalBasisRequests).isEmpty();
     }
 
     private ClassifyProduct classifyAt(Instant now) {
