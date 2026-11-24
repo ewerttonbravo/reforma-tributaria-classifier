@@ -34,6 +34,7 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
+import org.springframework.kafka.core.ConsumerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -68,6 +69,9 @@ class ClassificationListenerTest {
 
     @Autowired
     KafkaTemplate<String, ProductMessage> kafka;
+
+    @Autowired
+    ConsumerFactory<?, ?> consumerFactory;
 
     @Test
     void acceptedProductIsPublishedAsClassifiedWithItsLegalBasis() throws Exception {
@@ -114,6 +118,12 @@ class ClassificationListenerTest {
 
         assertThat(recordWithKey("produtos-classificados", "P004")).isNotNull();
         assertThat(ADVISED).filteredOn("P003"::equals).hasSize(1);
+    }
+
+    @Test
+    void consumerPollsOneProductAtATime() {
+        // Each product waits on the AI; a poll of 500 could outlast max.poll.interval.ms and be classified again.
+        assertThat(consumerFactory.getConfigurationProperties()).containsEntry(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 1);
     }
 
     /** Reads the topic from the beginning until a record with the key shows up. */
