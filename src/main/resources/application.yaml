@@ -17,8 +17,10 @@ spring:
       auto-offset-reset: earliest
       # Each record waits on the AI; a poll of 500 could outlast max.poll.interval.ms and be classified again.
       max-poll-records: 1
-      value-deserializer: org.springframework.kafka.support.serializer.JacksonJsonDeserializer
+      # Hands a record that is not a product's JSON to the error handler, which skips it, instead of failing every poll.
+      value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
       properties:
+        spring.deserializer.value.delegate.class: org.springframework.kafka.support.serializer.JacksonJsonDeserializer
         spring.json.value.default.type: com.ebravo.taxclassifier.adapter.kafka.ProductMessage
         spring.json.use.type.headers: false
 calculator:
