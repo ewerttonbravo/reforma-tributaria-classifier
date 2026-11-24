@@ -1,5 +1,6 @@
 package com.ebravo.taxclassifier.adapter.kafka;
 
+import com.ebravo.taxclassifier.adapter.cli.PublishCommand;
 import com.ebravo.taxclassifier.application.ClassifyProduct;
 import com.ebravo.taxclassifier.domain.Classification.Classified;
 import com.ebravo.taxclassifier.domain.Classification.ToReview;
@@ -13,7 +14,7 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
 
 @Component
-@Profile("!publish")
+@Profile("!" + PublishCommand.PROFILE)
 class ClassificationListener {
 
     static final String CLASSIFIED_TOPIC = "produtos-classificados";

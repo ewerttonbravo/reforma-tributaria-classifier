@@ -2,6 +2,7 @@ package com.ebravo.taxclassifier.adapter.kafka;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.ebravo.taxclassifier.adapter.cli.PublishCommand;
 import com.ebravo.taxclassifier.application.ProductPublisher;
 import com.ebravo.taxclassifier.domain.Product;
 import java.math.BigDecimal;
@@ -32,7 +33,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.kafka.KafkaContainer;
 
 @SpringBootTest
-@ActiveProfiles("publish")
+@ActiveProfiles(PublishCommand.PROFILE)
 @Testcontainers
 class KafkaProductPublisherTest {
 
