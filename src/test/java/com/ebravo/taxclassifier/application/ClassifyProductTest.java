@@ -64,6 +64,20 @@ class ClassifyProductTest {
         assertThat(legalBasisRequests).isEmpty();
     }
 
+    @ParameterizedTest
+    @CsvSource({
+        "2027-03-11T02:59:59Z, 2027-03-10",
+        "2027-03-11T03:00:00Z, 2027-03-11",
+    })
+    void officialListIsTheOneInForceTodayInSaoPaulo(Instant now, LocalDate today) {
+        answer = new Suggestion("200", "200003", new BigDecimal("0.95"), "Arroz integra a cesta básica.");
+
+        classifyAt(now).classify(PRODUCT);
+
+        assertThat(officialListDates).containsExactly(today);
+        assertThat(legalBasisRequests).containsExactly("200003 on " + today);
+    }
+
     private ClassifyProduct classifyAt(Instant now) {
         return new ClassifyProduct(
                 date -> {
