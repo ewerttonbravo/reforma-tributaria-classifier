@@ -18,4 +18,9 @@ class KafkaTopics {
     NewTopic classified() {
         return TopicBuilder.name(ClassificationListener.CLASSIFIED_TOPIC).partitions(3).replicas(1).build();
     }
+
+    @Bean
+    NewTopic review() {
+        return TopicBuilder.name(ClassificationListener.REVIEW_TOPIC).partitions(3).replicas(1).build();
+    }
 }
