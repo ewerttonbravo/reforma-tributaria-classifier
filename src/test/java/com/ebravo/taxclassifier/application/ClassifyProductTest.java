@@ -50,6 +50,16 @@ class ClassifyProductTest {
         assertThat(advised).containsExactly(PRODUCT, OFFICIAL);
     }
 
+    @Test
+    void classificationWithNoPublishedLegalBasisIsStillClassified() {
+        answer = new Suggestion("220", "220001", new BigDecimal("0.95"), "Incorporação imobiliária em regime especial.");
+
+        var classification = classifyAt(NOON_IN_SAO_PAULO).classify(PRODUCT);
+
+        assertThat(classification).isEqualTo(new Classified(answer, Optional.empty()));
+        assertThat(legalBasisRequests).containsExactly("220001 on " + TODAY);
+    }
+
     @ParameterizedTest
     @CsvSource({
         "000, 200003, 0.95, OUTSIDE_OFFICIAL_LIST",
