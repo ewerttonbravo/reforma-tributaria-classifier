@@ -23,8 +23,12 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.serialization.StringSerializer;
 import org.junit.jupiter.api.Test;
 import org.skyscreamer.jsonassert.JSONAssert;
 import org.skyscreamer.jsonassert.JSONCompareMode;
@@ -60,7 +64,8 @@ class ClassificationListenerTest {
             "P001", new Suggestion("200", "200003", new BigDecimal("0.95"), "Arroz integra a cesta básica."),
             "P002", new Suggestion("200", "200003", new BigDecimal("0.85"), "Feijão parece integrar a cesta básica."),
             "P004", new Suggestion("200", "200003", new BigDecimal("0.95"), "Arroz integra a cesta básica."),
-            "P005", new Suggestion("220", "220001", new BigDecimal("0.95"), "Incorporação imobiliária em regime especial."));
+            "P005", new Suggestion("220", "220001", new BigDecimal("0.95"), "Incorporação imobiliária em regime especial."),
+            "P007", new Suggestion("200", "200003", new BigDecimal("0.95"), "Arroz integra a cesta básica."));
     /** The codes the fake AI was asked about; a code without an answer makes it fail. */
     private static final List<String> ADVISED = new CopyOnWriteArrayList<>();
 
@@ -118,6 +123,19 @@ class ClassificationListenerTest {
 
         assertThat(recordWithKey("produtos-classificados", "P004")).isNotNull();
         assertThat(ADVISED).filteredOn("P003"::equals).hasSize(1);
+    }
+
+    @Test
+    void malformedRecordIsSkipped() throws Exception {
+        // Not a product's JSON, so it fails while the consumer polls, before the listener sees it.
+        var config = Map.<String, Object>of(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, KAFKA.getBootstrapServers());
+        try (var producer = new KafkaProducer<>(config, new StringSerializer(), new StringSerializer())) {
+            producer.send(new ProducerRecord<>(KafkaProductPublisher.TOPIC, 1, "P006", "oops")).get();
+        }
+        kafka.send(KafkaProductPublisher.TOPIC, 1, "P007", new ProductMessage("P007", "Arroz integral 1kg", "10063021", "9.90"))
+                .join();
+
+        assertThat(recordWithKey("produtos-classificados", "P007")).isNotNull();
     }
 
     @Test
