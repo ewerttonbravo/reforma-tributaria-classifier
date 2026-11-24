@@ -9,9 +9,13 @@ import com.ebravo.taxclassifier.domain.Verdict.Accepted;
 import com.ebravo.taxclassifier.domain.Verdict.NeedsReview;
 import java.time.Clock;
 import java.time.LocalDate;
+import java.time.ZoneId;
 
 /** Asks the AI to classify a product from the official list of the day and checks its answer. */
 public final class ClassifyProduct {
+
+    // The official tables are read for the calendar day in Brazil, whatever zone the clock runs in.
+    private static final ZoneId SAO_PAULO = ZoneId.of("America/Sao_Paulo");
 
     private final OfficialCandidates candidates;
     private final AiAdvisor advisor;
@@ -29,7 +33,7 @@ public final class ClassifyProduct {
     }
 
     public Classification classify(Product product) {
-        var today = LocalDate.now(clock);
+        var today = LocalDate.ofInstant(clock.instant(), SAO_PAULO);
         var official = candidates.on(today);
         return switch (check.check(advisor.suggest(product, official), official)) {
             case Accepted(var suggestion) -> new Classified(suggestion, legalBasis.of(suggestion.cClassTrib(), today));
