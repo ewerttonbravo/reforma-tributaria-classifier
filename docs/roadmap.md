@@ -1,6 +1,6 @@
 # Roadmap
 
-Approved by the maintainer on 2026-11-20; task 03 split into 03a and 03b on 2026-11-21 to stay under the size gate; task 06 split into 06a, 06b and 06c on 2026-11-23, for size and because the legal basis comes from the calculator, not the AI. The unit of work is the task: one observable behavior, one small PR.
+Approved by the maintainer on 2026-11-20; task 03 split into 03a and 03b on 2026-11-21 to stay under the size gate; task 06 split into 06a, 06b and 06c on 2026-11-23, for size and because the legal basis comes from the calculator, not the AI; task 07 split into 07a, 07b and 07c on 2026-11-24 to stay under the size gate. The unit of work is the task: one observable behavior, one small PR.
 
 ## Frame of every task
 **Elucidate**, before any code:
@@ -33,9 +33,11 @@ Approved by the maintainer on 2026-11-20; task 03 split into 03a and 03b on 2026
 | 06a | Claude adapter | Port + `claude-haiku-5-5` adapter with structured JSON output: the answer becomes a `Suggestion` with its justification; contract via HTTP stub; manual checklist with the real key | 05 |
 | 06b | AI failures | A refusal, a truncated answer (`max_tokens`), a malformed answer or an HTTP error is a failure, never a suggestion; the SDK does not retry (retry is task 12) | 06a |
 | 06c | Official legal basis | Port + adapter: the official legal basis for a date and `cClassTrib`, from `GET /dados-abertos/fundamentacoes-legais`; contract with the fixtures from 01 | 01 |
-| 07 | Classification consumer | Consumes `produtos` and publishes to `produtos-classificados` or `produtos-revisao` (Testcontainers + fakes) | 03a, 04, 06b, 06c |
+| 07a | Classify a product | Use case: the official list of the day in São Paulo, the AI's suggestion, the check and the official legal basis give a classification (without legal basis when none is published) or a review with its reason; in-memory fakes | 04, 05, 06b, 06c |
+| 07b | Classification consumer | Consumes `produtos` and publishes to `produtos-classificados` or `produtos-revisao`; confidence threshold from configuration; the publish command does not start the consumer (Testcontainers + fakes) | 03a, 07a |
+| 07c | Official lists cached by date | The calculator adapters read the official list and the legal bases once per date, keeping only the latest date; a failure is never cached | 07a |
 | 08 | Calculate CBS/IBS | Port + `POST /observabilidade/regime-geral` adapter; `estadoItem` → `sealed` result; `dhFatoGerador` at `-03:00`; contract with the official examples | 01 |
-| 09 | Route by estadoItem | Classified with CBS/IBS amounts for `CALCULADO` / `CALCULO_SIMULADO`; `INCONSISTENCIA_ENTRADA` and `REG-011` → review (scenario 4) | 07, 08 |
+| 09 | Route by estadoItem | Classified with CBS/IBS amounts for `CALCULADO` / `CALCULO_SIMULADO`; `INCONSISTENCIA_ENTRADA` and `REG-011` → review (scenario 4) | 07b, 08 |
 | 10 | Manual offset commit | Offset committed only after publishing; a crash before publishing → reprocessed | 09 |
 | 11 | Idempotency | A duplicate message calls the AI only once (scenario 1); PostgreSQL vs H2 decided at elucidation | 10 |
 | 12 | Retry with backoff | Calculator `FALHA_TECNICA` / timeout and AI 429 retried with backoff; calculator goes down and comes back → recovers (scenario 2) | 10 |
