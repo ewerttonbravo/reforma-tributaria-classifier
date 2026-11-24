@@ -33,7 +33,8 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.kafka.KafkaContainer;
 
-@SpringBootTest
+// The threshold is above the default, so a review at 0.85 proves it is read from configuration.
+@SpringBootTest(properties = "classification.confidence-threshold=0.90")
 @Testcontainers
 class ClassificationListenerTest {
 
@@ -46,7 +47,8 @@ class ClassificationListenerTest {
     private static final LegalBasis BASIS_OF_200003 = new LegalBasis("Art. 125", "Art. 125. Ficam reduzidas a zero", "LC 214/2025");
     /** The fake AI's answer, by product code. */
     private static final Map<String, Suggestion> ANSWERS = Map.of(
-            "P001", new Suggestion("200", "200003", new BigDecimal("0.95"), "Arroz integra a cesta básica."));
+            "P001", new Suggestion("200", "200003", new BigDecimal("0.95"), "Arroz integra a cesta básica."),
+            "P002", new Suggestion("200", "200003", new BigDecimal("0.85"), "Feijão parece integrar a cesta básica."));
 
     @Autowired
     ProductPublisher publisher;
@@ -61,6 +63,18 @@ class ClassificationListenerTest {
                  "suggestion":{"cst":"200","cClassTrib":"200003","confidence":"0.95","justification":"Arroz integra a cesta básica."},
                  "legalBasis":{"shortText":"Art. 125","text":"Art. 125. Ficam reduzidas a zero","normativeReference":"LC 214/2025"}}""",
                 recordWithKey("produtos-classificados", "P001").value(), JSONCompareMode.STRICT);
+    }
+
+    @Test
+    void rejectedProductGoesToReviewWithItsReason() throws Exception {
+        publisher.publish(List.of(new Product("P002", "Feijão carioca 1kg", "07133319", new BigDecimal("8.49"))));
+
+        JSONAssert.assertEquals(
+                """
+                {"product":{"code":"P002","description":"Feijão carioca 1kg","ncm":"07133319","price":"8.49"},
+                 "suggestion":{"cst":"200","cClassTrib":"200003","confidence":"0.85","justification":"Feijão parece integrar a cesta básica."},
+                 "reason":"LOW_CONFIDENCE"}""",
+                recordWithKey("produtos-revisao", "P002").value(), JSONCompareMode.STRICT);
     }
 
     /** Reads the topic from the beginning until a record with the key shows up. */
