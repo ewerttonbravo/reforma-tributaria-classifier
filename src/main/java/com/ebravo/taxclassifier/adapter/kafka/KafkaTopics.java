@@ -13,4 +13,9 @@ class KafkaTopics {
     NewTopic products() {
         return TopicBuilder.name(KafkaProductPublisher.TOPIC).partitions(3).replicas(1).build();
     }
+
+    @Bean
+    NewTopic classified() {
+        return TopicBuilder.name(ClassificationListener.CLASSIFIED_TOPIC).partitions(3).replicas(1).build();
+    }
 }
