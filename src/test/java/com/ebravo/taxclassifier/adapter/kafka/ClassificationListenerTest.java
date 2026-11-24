@@ -48,14 +48,18 @@ class ClassificationListenerTest {
     @ServiceConnection
     static final KafkaContainer KAFKA = new KafkaContainer("apache/kafka:4.2.2");
 
-    private static final List<TaxSituation> OFFICIAL = List.of(new TaxSituation("200", "Alíquota reduzida", List.of(
-            new TaxClassification("200003", "Vendas de produtos destinados à alimentação humana (Anexo I)"))));
+    private static final List<TaxSituation> OFFICIAL = List.of(
+            new TaxSituation("200", "Alíquota reduzida", List.of(
+                    new TaxClassification("200003", "Vendas de produtos destinados à alimentação humana (Anexo I)"))),
+            new TaxSituation("220", "Alíquota fixa", List.of(
+                    new TaxClassification("220001", "Incorporação imobiliária submetida ao regime especial de tributação"))));
     private static final LegalBasis BASIS_OF_200003 = new LegalBasis("Art. 125", "Art. 125. Ficam reduzidas a zero", "LC 214/2025");
     /** The fake AI's answer, by product code. */
     private static final Map<String, Suggestion> ANSWERS = Map.of(
             "P001", new Suggestion("200", "200003", new BigDecimal("0.95"), "Arroz integra a cesta básica."),
             "P002", new Suggestion("200", "200003", new BigDecimal("0.85"), "Feijão parece integrar a cesta básica."),
-            "P004", new Suggestion("200", "200003", new BigDecimal("0.95"), "Arroz integra a cesta básica."));
+            "P004", new Suggestion("200", "200003", new BigDecimal("0.95"), "Arroz integra a cesta básica."),
+            "P005", new Suggestion("220", "220001", new BigDecimal("0.95"), "Incorporação imobiliária em regime especial."));
     /** The codes the fake AI was asked about; a code without an answer makes it fail. */
     private static final List<String> ADVISED = new CopyOnWriteArrayList<>();
 
@@ -75,6 +79,18 @@ class ClassificationListenerTest {
                  "suggestion":{"cst":"200","cClassTrib":"200003","confidence":"0.95","justification":"Arroz integra a cesta básica."},
                  "legalBasis":{"shortText":"Art. 125","text":"Art. 125. Ficam reduzidas a zero","normativeReference":"LC 214/2025"}}""",
                 recordWithKey("produtos-classificados", "P001").value(), JSONCompareMode.STRICT);
+    }
+
+    @Test
+    void classificationWithNoPublishedLegalBasisCarriesANullOne() throws Exception {
+        publisher.publish(List.of(new Product("P005", "Unidade imobiliária", "10063021", new BigDecimal("1000.00"))));
+
+        JSONAssert.assertEquals(
+                """
+                {"product":{"code":"P005","description":"Unidade imobiliária","ncm":"10063021","price":"1000.00"},
+                 "suggestion":{"cst":"220","cClassTrib":"220001","confidence":"0.95","justification":"Incorporação imobiliária em regime especial."},
+                 "legalBasis":null}""",
+                recordWithKey("produtos-classificados", "P005").value(), JSONCompareMode.STRICT);
     }
 
     @Test
