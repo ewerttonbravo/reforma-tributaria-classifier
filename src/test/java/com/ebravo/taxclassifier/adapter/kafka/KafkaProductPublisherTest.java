@@ -23,6 +23,7 @@ import org.skyscreamer.jsonassert.JSONCompareMode;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
+import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
 import org.springframework.kafka.core.ProducerFactory;
 import org.springframework.kafka.test.utils.KafkaTestUtils;
 import org.springframework.test.context.ActiveProfiles;
@@ -44,6 +45,9 @@ class KafkaProductPublisherTest {
 
     @Autowired
     ProducerFactory<?, ?> producerFactory;
+
+    @Autowired
+    KafkaListenerEndpointRegistry listeners;
 
     @Test
     void eachProductIsKeyedByItsCodeWithAJsonValue() throws Exception {
@@ -86,6 +90,11 @@ class KafkaProductPublisherTest {
         assertThat(producerFactory.getConfigurationProperties())
                 .containsEntry(ProducerConfig.ACKS_CONFIG, "all")
                 .containsEntry(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true");
+    }
+
+    @Test
+    void publishProfileStartsNoConsumer() {
+        assertThat(listeners.getListenerContainers()).isEmpty();
     }
 
     /** Reads only what this call publishes: the consumer starts at the end of every partition. */
