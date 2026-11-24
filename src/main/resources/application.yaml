@@ -1,6 +1,4 @@
 spring:
-  main:
-    banner-mode: off
   kafka:
     bootstrap-servers: localhost:9092
     admin:
@@ -27,9 +25,3 @@ classification:
   confidence-threshold: 0.80
 ai:
   base-url: https://api.anthropic.com
-logging:
-  level:
-    # stdout carries the command's summary only; the command reports a Kafka failure itself on stderr.
-    root: warn
-    org.apache.kafka: error
-    org.springframework.kafka: off

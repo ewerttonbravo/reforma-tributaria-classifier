@@ -27,6 +27,9 @@ public class PublishCommand implements ApplicationRunner, ExitCodeGenerator {
 
     private static final String NAME = "publish";
 
+    /** The profile the command runs in, named after it. */
+    public static final String PROFILE = NAME;
+
     private static final String BYTE_ORDER_MARK = "\uFEFF";
 
     private final PublishProducts publishProducts;

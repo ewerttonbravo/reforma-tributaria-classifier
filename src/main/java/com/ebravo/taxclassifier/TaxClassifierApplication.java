@@ -14,7 +14,12 @@ public class TaxClassifierApplication {
         }
     }
 
+    /** The publish command runs in the {@code publish} profile, which leaves the classification listener out. */
     static SpringApplication application(String... args) {
-        return new SpringApplication(TaxClassifierApplication.class);
+        var application = new SpringApplication(TaxClassifierApplication.class);
+        if (PublishCommand.isRequested(args)) {
+            application.setAdditionalProfiles(PublishCommand.PROFILE);
+        }
+        return application;
     }
 }
