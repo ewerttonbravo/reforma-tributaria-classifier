@@ -1,6 +1,10 @@
 package com.ebravo.taxclassifier.adapter.kafka;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.ebravo.taxclassifier.application.AiAdvisor;
+import com.ebravo.taxclassifier.application.AiFailure;
+import com.ebravo.taxclassifier.application.AiFailure.Kind;
 import com.ebravo.taxclassifier.application.OfficialCandidates;
 import com.ebravo.taxclassifier.application.OfficialLegalBasis;
 import com.ebravo.taxclassifier.application.ProductPublisher;
@@ -15,6 +19,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.CopyOnWriteArrayList;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
@@ -29,6 +34,7 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.kafka.KafkaContainer;
@@ -48,10 +54,16 @@ class ClassificationListenerTest {
     /** The fake AI's answer, by product code. */
     private static final Map<String, Suggestion> ANSWERS = Map.of(
             "P001", new Suggestion("200", "200003", new BigDecimal("0.95"), "Arroz integra a cesta básica."),
-            "P002", new Suggestion("200", "200003", new BigDecimal("0.85"), "Feijão parece integrar a cesta básica."));
+            "P002", new Suggestion("200", "200003", new BigDecimal("0.85"), "Feijão parece integrar a cesta básica."),
+            "P004", new Suggestion("200", "200003", new BigDecimal("0.95"), "Arroz integra a cesta básica."));
+    /** The codes the fake AI was asked about; a code without an answer makes it fail. */
+    private static final List<String> ADVISED = new CopyOnWriteArrayList<>();
 
     @Autowired
     ProductPublisher publisher;
+
+    @Autowired
+    KafkaTemplate<String, ProductMessage> kafka;
 
     @Test
     void acceptedProductIsPublishedAsClassifiedWithItsLegalBasis() throws Exception {
@@ -75,6 +87,17 @@ class ClassificationListenerTest {
                  "suggestion":{"cst":"200","cClassTrib":"200003","confidence":"0.85","justification":"Feijão parece integrar a cesta básica."},
                  "reason":"LOW_CONFIDENCE"}""",
                 recordWithKey("produtos-revisao", "P002").value(), JSONCompareMode.STRICT);
+    }
+
+    @Test
+    void failedClassificationIsTriedOnceAndSkipped() {
+        // One partition, so P004 is classified only after the listener is done with P003.
+        kafka.send(KafkaProductPublisher.TOPIC, 0, "P003", new ProductMessage("P003", "Produto sem resposta", "10063021", "1.00"));
+        kafka.send(KafkaProductPublisher.TOPIC, 0, "P004", new ProductMessage("P004", "Arroz parboilizado 1kg", "10063021", "6.50"))
+                .join();
+
+        assertThat(recordWithKey("produtos-classificados", "P004")).isNotNull();
+        assertThat(ADVISED).filteredOn("P003"::equals).hasSize(1);
     }
 
     /** Reads the topic from the beginning until a record with the key shows up. */
@@ -110,7 +133,14 @@ class ClassificationListenerTest {
         @Bean
         @Primary
         AiAdvisor fakeAdvisor() {
-            return (product, official) -> ANSWERS.get(product.code());
+            return (product, official) -> {
+                ADVISED.add(product.code());
+                var answer = ANSWERS.get(product.code());
+                if (answer == null) {
+                    throw new AiFailure(Kind.REFUSED, "the AI refused", null);
+                }
+                return answer;
+            };
         }
 
         @Bean
