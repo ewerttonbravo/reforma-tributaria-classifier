@@ -19,7 +19,7 @@ spring:
       auto-offset-reset: earliest
       value-deserializer: org.springframework.kafka.support.serializer.JacksonJsonDeserializer
       properties:
-        spring.json.value.default.type: com.ebravo.taxclassifier.adapter.kafka.KafkaProductPublisher$ProductMessage
+        spring.json.value.default.type: com.ebravo.taxclassifier.adapter.kafka.ProductMessage
         spring.json.use.type.headers: false
 calculator:
   base-url: http://localhost:8080/api/calculadora
