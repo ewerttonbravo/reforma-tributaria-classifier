@@ -109,7 +109,7 @@ class ClassificationListenerTest {
                 {"product":{"code":"P005","description":"Unidade imobiliária","ncm":"10063021","price":"1000.00"},
                  "suggestion":{"cst":"220","cClassTrib":"220001","confidence":"0.95","justification":"Incorporação imobiliária em regime especial."},
                  "legalBasis":null,
-                 "calculation":{"base":"1000.00","cbs":"0.23","ibs":"0.03","simulated":false}}""",
+                 "calculation":{"base":"1000.00","cbs":"0.23","ibs":"0.03","simulated":true}}""",
                 recordWithKey("produtos-classificados", "P005").value(), JSONCompareMode.STRICT);
     }
 
@@ -211,13 +211,16 @@ class ClassificationListenerTest {
             };
         }
 
-        /** REG-011 for 200035; otherwise the amounts of the recorded calculation of P001 in 2026, on each product's price as the base. */
+        /**
+         * REG-011 for 200035; otherwise the amounts of the recorded calculation of P001 in 2026, on each product's price as the
+         * base, simulated for P005 only, so the flag is proven to reach the topic both ways.
+         */
         @Bean
         @Primary
         TaxCalculator fakeCalculator() {
             return (product, suggestion, taxableEvent) -> suggestion.cClassTrib().equals("200035")
                     ? new InputInconsistency(List.of(NOT_LINKED))
-                    : new Calculated(product.price(), new BigDecimal("0.23"), new BigDecimal("0.03"), false);
+                    : new Calculated(product.price(), new BigDecimal("0.23"), new BigDecimal("0.03"), product.code().equals("P005"));
         }
 
         @Bean
