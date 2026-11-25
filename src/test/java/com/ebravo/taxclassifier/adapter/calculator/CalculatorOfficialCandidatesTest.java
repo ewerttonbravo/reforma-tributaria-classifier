@@ -20,6 +20,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.restclient.test.autoconfigure.RestClientTest;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClientResponseException;
 
@@ -27,6 +28,8 @@ import org.springframework.web.client.RestClientResponseException;
 @RestClientTest(
         components = CalculatorOfficialCandidates.class,
         properties = "calculator.base-url=http://calculator/api/calculadora")
+// The adapter keeps the last date read, so each test gets its own.
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_EACH_TEST_METHOD)
 class CalculatorOfficialCandidatesTest {
 
     private static final String LIST_FOR_DATE =
@@ -59,6 +62,19 @@ class CalculatorOfficialCandidatesTest {
         assertThat(situations.getLast()).isEqualTo(new TaxSituation("830", "Exclusão de base de cálculo", List.of(
                 new TaxClassification("830001",
                         "Documento com exclusão da BC da CBS e do IBS de energia elétrica fornecida pela distribuidora à UC"))));
+    }
+
+    /** The server expects one request, so a second one for the same date fails the test. */
+    @Test
+    void officialListIsReadOncePerDate() {
+        calculator.expect(requestTo(LIST_FOR_DATE + "2027-03-10"))
+                .andRespond(withSuccess(recorded("situacoes-tributarias-cbs-ibs-2027-03-10.json"), APPLICATION_JSON));
+
+        var first = candidates.on(LocalDate.of(2027, 3, 10));
+        var second = candidates.on(LocalDate.of(2027, 3, 10));
+
+        calculator.verify();
+        assertThat(second).isEqualTo(first).hasSize(18);
     }
 
     @Test

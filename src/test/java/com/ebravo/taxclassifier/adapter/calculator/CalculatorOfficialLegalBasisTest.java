@@ -16,6 +16,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.restclient.test.autoconfigure.RestClientTest;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClientResponseException;
 
@@ -23,6 +24,8 @@ import org.springframework.web.client.RestClientResponseException;
 @RestClientTest(
         components = CalculatorOfficialLegalBasis.class,
         properties = "calculator.base-url=http://calculator/api/calculadora")
+// The adapter keeps the last date read, so each test gets its own.
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_EACH_TEST_METHOD)
 class CalculatorOfficialLegalBasisTest {
 
     private static final String BASES_FOR_DATE =
@@ -61,6 +64,19 @@ class CalculatorOfficialLegalBasisTest {
 
         calculator.verify();
         assertThat(basis).isEmpty();
+    }
+
+    /** Two codes of the same date share the date's list: the server expects one request. */
+    @Test
+    void legalBasesAreReadOncePerDate() {
+        calculator.expect(requestTo(BASES_FOR_DATE)).andRespond(withSuccess(recorded(), APPLICATION_JSON));
+
+        var withBasis = legalBasis.of("000002", DATE);
+        var withoutBasis = legalBasis.of("220001", DATE);
+
+        calculator.verify();
+        assertThat(withBasis).map(LegalBasis::shortText).contains("Art. 11, VIII");
+        assertThat(withoutBasis).isEmpty();
     }
 
     @Test

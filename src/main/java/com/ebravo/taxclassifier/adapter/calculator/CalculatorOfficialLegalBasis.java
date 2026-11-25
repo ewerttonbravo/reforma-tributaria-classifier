@@ -15,6 +15,7 @@ import org.springframework.web.client.RestClient;
 class CalculatorOfficialLegalBasis implements OfficialLegalBasis {
 
     private final RestClient calculator;
+    private final LatestDateCache<List<LegalBasisResponse>> cache = new LatestDateCache<>(this::read);
 
     CalculatorOfficialLegalBasis(RestClient.Builder builder, @Value("${calculator.base-url}") String baseUrl) {
         this.calculator = builder.baseUrl(baseUrl).build();
@@ -24,14 +25,17 @@ class CalculatorOfficialLegalBasis implements OfficialLegalBasis {
     @Override
     public Optional<LegalBasis> of(String cClassTrib, LocalDate date) {
         Objects.requireNonNull(cClassTrib, "cClassTrib");
-        return calculator.get()
-                .uri("/dados-abertos/fundamentacoes-legais?data={date}", date)
-                .retrieve()
-                .body(new ParameterizedTypeReference<List<LegalBasisResponse>>() {})
-                .stream()
+        return cache.on(date).stream()
                 .filter(basis -> basis.codigoClassificacaoTributaria().equals(cClassTrib))
                 .findFirst()
                 .map(LegalBasisResponse::toDomain);
+    }
+
+    private List<LegalBasisResponse> read(LocalDate date) {
+        return calculator.get()
+                .uri("/dados-abertos/fundamentacoes-legais?data={date}", date)
+                .retrieve()
+                .body(new ParameterizedTypeReference<List<LegalBasisResponse>>() {});
     }
 
     /** The calculator's field names; the CST, the descriptions and the tax set stay out. */
