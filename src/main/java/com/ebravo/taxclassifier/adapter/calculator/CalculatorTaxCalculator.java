@@ -9,6 +9,7 @@ import com.ebravo.taxclassifier.domain.TaxCalculation.Calculated;
 import com.ebravo.taxclassifier.domain.TaxCalculation.InputInconsistency;
 import com.ebravo.taxclassifier.domain.TaxCalculation.NotImplemented;
 import com.ebravo.taxclassifier.domain.TaxCalculation.TechnicalFailure;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -25,25 +26,34 @@ class CalculatorTaxCalculator implements TaxCalculator {
     // The same zone as the day of the official list, so the calculation and the list share a date.
     private static final ZoneId SAO_PAULO = ZoneId.of("America/Sao_Paulo");
 
+    // Release 1.6.1 resolves the rates before this year and forbids sending them (REG-036); from it on, requires them (REG-037).
+    private static final int FIRST_YEAR_OF_NOMINAL_RATES = 2027;
+
     private final RestClient calculator;
     private final long municipality;
     private final String uf;
+    private final NominalRates nominalRates;
 
     CalculatorTaxCalculator(
             RestClient.Builder builder,
             @Value("${calculator.base-url}") String baseUrl,
             @Value("${calculator.municipality}") long municipality,
-            @Value("${calculator.uf}") String uf) {
+            @Value("${calculator.uf}") String uf,
+            @Value("${calculator.nominal-rates.cbs}") BigDecimal cbs,
+            @Value("${calculator.nominal-rates.ibs-state}") BigDecimal ibsState,
+            @Value("${calculator.nominal-rates.ibs-municipal}") BigDecimal ibsMunicipal) {
         this.calculator = builder.baseUrl(baseUrl).build();
         this.municipality = municipality;
         this.uf = uf;
+        this.nominalRates = new NominalRates(cbs, ibsState, ibsMunicipal);
     }
 
     @Override
     public TaxCalculation calculate(Product product, Suggestion suggestion, Instant taxableEvent) {
-        var item = new ItemRequest(1, product.ncm(), suggestion.cst(), suggestion.cClassTrib(), product.price());
-        var request = new OperationRequest(product.code(), "1.0.0",
-                taxableEvent.atZone(SAO_PAULO).toOffsetDateTime(), municipality, uf, List.of(item));
+        var taxableEventInSaoPaulo = taxableEvent.atZone(SAO_PAULO).toOffsetDateTime();
+        var rates = taxableEventInSaoPaulo.getYear() >= FIRST_YEAR_OF_NOMINAL_RATES ? nominalRates : null;
+        var item = new ItemRequest(1, product.ncm(), suggestion.cst(), suggestion.cClassTrib(), product.price(), rates);
+        var request = new OperationRequest(product.code(), "1.0.0", taxableEventInSaoPaulo, municipality, uf, List.of(item));
         var response = calculator.post()
                 .uri("/observabilidade/regime-geral")
                 .body(request)
@@ -62,7 +72,12 @@ class CalculatorTaxCalculator implements TaxCalculator {
     /** The calculator's field names; one item per product. */
     record OperationRequest(String id, String versao, OffsetDateTime dhFatoGerador, long municipio, String uf, List<ItemRequest> itens) {}
 
-    record ItemRequest(int numero, String ncm, String cst, String cClassTrib, BigDecimal baseCalculo) {}
+    record ItemRequest(
+            int numero, String ncm, String cst, String cClassTrib, BigDecimal baseCalculo,
+            @JsonInclude(JsonInclude.Include.NON_NULL) NominalRates aliquotasNominais) {}
+
+    /** In percent, as the calculator takes them. */
+    record NominalRates(BigDecimal cbs, BigDecimal ibsEstadual, BigDecimal ibsMunicipal) {}
 
     /**
      * The amounts are read from the operation's total, which is the item's own as the operation has one item: release 1.6.1
