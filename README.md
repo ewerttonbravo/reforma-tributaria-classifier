@@ -88,6 +88,7 @@ curl -s -D - -o /dev/null -X POST "$B/observabilidade/regime-geral" -H 'Content-
 R=$F/regime-geral-p001-2026-request.json         # what the adapter sends for P001
 post() { curl -s -X POST "$B/observabilidade/regime-geral" -H 'Content-Type: application/json' -d @-; }
 post < $R | cmp - $F/regime-geral-p001-2026-calculado.json
+sed 's/"cst":"000","cClassTrib":"000001"/"cst":"410","cClassTrib":"410001"/' $R | post | cmp - $F/regime-geral-p001-2026-imune.json
 sed 's/"cst":"000","cClassTrib":"000001"/"cst":"200","cClassTrib":"200035"/' $R | post | cmp - $F/regime-geral-p001-2026-reg011.json
 sed 's/"cst":"000","cClassTrib":"000001"/"cst":"620","cClassTrib":"620001"/' $R | post | cmp - $F/regime-geral-p001-2026-nao-implementado.json
 sed -e 's/2026-11-25T23:30/2027-01-04T10:00/' -e 's/"baseCalculo":25.90/&,"aliquotasNominais":{"cbs":8.8,"ibsEstadual":0.1,"ibsMunicipal":0.0}/' $R \
