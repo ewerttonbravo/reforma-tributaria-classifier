@@ -36,13 +36,15 @@ class ClassifyProductTest {
             new TaxSituation("220", "Alíquota fixa", List.of(
                     new TaxClassification("220001", "Incorporação imobiliária submetida ao regime especial de tributação"))));
     private static final LegalBasis BASIS_OF_200003 = new LegalBasis("Art. 125", "Art. 125. Ficam reduzidas a zero", "LC 214/2025");
+    private static final Calculated CALCULATED =
+            new Calculated(new BigDecimal("25.90"), new BigDecimal("0.23"), new BigDecimal("0.03"), false);
 
     private final List<LocalDate> officialListDates = new ArrayList<>();
     private final List<String> calculations = new ArrayList<>();
     private final List<String> legalBasisRequests = new ArrayList<>();
     private final List<Object> advised = new ArrayList<>();
     private Suggestion answer;
-    private TaxCalculation calculation = new Calculated(new BigDecimal("25.90"), new BigDecimal("0.23"), new BigDecimal("0.03"), false);
+    private TaxCalculation calculation = CALCULATED;
 
     @ParameterizedTest
     @CsvSource({"false", "true"})
@@ -64,7 +66,7 @@ class ClassifyProductTest {
 
         var classification = classifyAt(NOON_IN_SAO_PAULO).classify(PRODUCT);
 
-        assertThat(classification).isEqualTo(new Classified(answer, Optional.empty(), calculation));
+        assertThat(classification).isEqualTo(new Classified(answer, Optional.empty(), CALCULATED));
         assertThat(legalBasisRequests).containsExactly("220001 on " + TODAY);
     }
 

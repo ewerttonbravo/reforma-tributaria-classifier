@@ -8,6 +8,7 @@ import com.ebravo.taxclassifier.domain.LegalBasis;
 import com.ebravo.taxclassifier.domain.Product;
 import com.ebravo.taxclassifier.domain.ReviewReason;
 import com.ebravo.taxclassifier.domain.Suggestion;
+import com.ebravo.taxclassifier.domain.TaxCalculation.Calculated;
 import org.springframework.context.annotation.Profile;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.core.KafkaTemplate;
@@ -32,8 +33,9 @@ class ClassificationListener {
     void classify(ProductMessage message) {
         var product = message.toProduct();
         switch (classifyProduct.classify(product)) {
-            case Classified(var suggestion, var legalBasis) -> send(CLASSIFIED_TOPIC, product,
-                    new ClassifiedMessage(message, SuggestionMessage.of(suggestion), legalBasis.orElse(null)));
+            case Classified(var suggestion, var legalBasis, var calculation) -> send(CLASSIFIED_TOPIC, product,
+                    new ClassifiedMessage(message, SuggestionMessage.of(suggestion), legalBasis.orElse(null),
+                            CalculationMessage.of(calculation)));
             case ToReview(var suggestion, var reason) -> send(REVIEW_TOPIC, product,
                     new ReviewMessage(message, SuggestionMessage.of(suggestion), reason));
         }
@@ -52,7 +54,17 @@ class ClassificationListener {
         }
     }
 
-    record ClassifiedMessage(ProductMessage product, SuggestionMessage suggestion, LegalBasis legalBasis) {}
+    /** Amounts as strings, like the price, so no consumer reads them as a double. */
+    record CalculationMessage(String base, String cbs, String ibs, boolean simulated) {
+
+        static CalculationMessage of(Calculated calculation) {
+            return new CalculationMessage(calculation.base().toPlainString(), calculation.cbs().toPlainString(),
+                    calculation.ibs().toPlainString(), calculation.simulated());
+        }
+    }
+
+    record ClassifiedMessage(
+            ProductMessage product, SuggestionMessage suggestion, LegalBasis legalBasis, CalculationMessage calculation) {}
 
     record ReviewMessage(ProductMessage product, SuggestionMessage suggestion, ReviewReason reason) {}
 }

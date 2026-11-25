@@ -1,5 +1,6 @@
 package com.ebravo.taxclassifier.domain;
 
+import com.ebravo.taxclassifier.domain.TaxCalculation.Calculated;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -8,11 +9,12 @@ public sealed interface Classification {
 
     Suggestion suggestion();
 
-    /** The legal basis is empty when the calculator publishes none for the cClassTrib. */
-    record Classified(Suggestion suggestion, Optional<LegalBasis> legalBasis) implements Classification {
+    /** The legal basis is empty when the calculator publishes none for the cClassTrib; the calculation may be simulated. */
+    record Classified(Suggestion suggestion, Optional<LegalBasis> legalBasis, Calculated calculation) implements Classification {
 
         public Classified {
             Objects.requireNonNull(legalBasis, "legalBasis");
+            Objects.requireNonNull(calculation, "calculation");
         }
     }
 

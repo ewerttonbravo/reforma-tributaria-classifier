@@ -5,13 +5,14 @@ import com.ebravo.taxclassifier.domain.Classification.Classified;
 import com.ebravo.taxclassifier.domain.Classification.ToReview;
 import com.ebravo.taxclassifier.domain.Product;
 import com.ebravo.taxclassifier.domain.SuggestionCheck;
+import com.ebravo.taxclassifier.domain.TaxCalculation.Calculated;
 import com.ebravo.taxclassifier.domain.Verdict.Accepted;
 import com.ebravo.taxclassifier.domain.Verdict.NeedsReview;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.ZoneId;
 
-/** Asks the AI to classify a product from the official list of the day and checks its answer. */
+/** Asks the AI to classify a product from the official list of the day, checks its answer and calculates CBS and IBS under it. */
 public final class ClassifyProduct {
 
     // The official tables are read for the calendar day in Brazil, whatever zone the clock runs in.
@@ -20,23 +21,31 @@ public final class ClassifyProduct {
     private final OfficialCandidates candidates;
     private final AiAdvisor advisor;
     private final SuggestionCheck check;
+    private final TaxCalculator calculator;
     private final OfficialLegalBasis legalBasis;
     private final Clock clock;
 
     public ClassifyProduct(
-            OfficialCandidates candidates, AiAdvisor advisor, SuggestionCheck check, OfficialLegalBasis legalBasis, Clock clock) {
+            OfficialCandidates candidates, AiAdvisor advisor, SuggestionCheck check, TaxCalculator calculator,
+            OfficialLegalBasis legalBasis, Clock clock) {
         this.candidates = candidates;
         this.advisor = advisor;
         this.check = check;
+        this.calculator = calculator;
         this.legalBasis = legalBasis;
         this.clock = clock;
     }
 
     public Classification classify(Product product) {
-        var today = LocalDate.ofInstant(clock.instant(), SAO_PAULO);
+        // One instant, so the official list and the calculation share a day.
+        var now = clock.instant();
+        var today = LocalDate.ofInstant(now, SAO_PAULO);
         var official = candidates.on(today);
         return switch (check.check(advisor.suggest(product, official), official)) {
-            case Accepted(var suggestion) -> new Classified(suggestion, legalBasis.of(suggestion.cClassTrib(), today));
+            case Accepted(var suggestion) -> switch (calculator.calculate(product, suggestion, now)) {
+                case Calculated calculation -> new Classified(suggestion, legalBasis.of(suggestion.cClassTrib(), today), calculation);
+                default -> throw new UnsupportedOperationException("routed in the next cycle");
+            };
             case NeedsReview(var suggestion, var reason) -> new ToReview(suggestion, reason);
         };
     }
