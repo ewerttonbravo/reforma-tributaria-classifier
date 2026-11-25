@@ -86,6 +86,21 @@ class CalculatorTaxCalculatorTest {
                 new Calculated(new BigDecimal("25.90"), new BigDecimal("0.23"), new BigDecimal("0.03"), false));
     }
 
+    /**
+     * The system clock carries fractions of a second, which release 1.6.1 rejects with HTTP 400 (seen in the manual
+     * checklist of task 09): it reads dhFatoGerador as yyyy-MM-dd'T'HH:mm:ssXXX.
+     */
+    @Test
+    void taxableEventIsSentInWholeSeconds() {
+        server.expect(requestTo(REGIME_GERAL))
+                .andExpect(content().json(recorded("regime-geral-p001-2026-request.json"), JsonCompareMode.STRICT))
+                .andRespond(withSuccess(recorded("regime-geral-p001-2026-calculado.json"), APPLICATION_JSON));
+
+        calculator.calculate(RICE, FULL_TAXATION, LATE_EVENING.plusNanos(999_999_999));
+
+        server.verify();
+    }
+
     /** Already 2027 in UTC, still 2026 in São Paulo, where release 1.6.1 forbids the rates (REG-036). */
     @Test
     void lastInstantOf2026InSaoPauloCarriesNoRates() {
