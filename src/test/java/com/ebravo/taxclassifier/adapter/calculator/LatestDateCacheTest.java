@@ -1,10 +1,12 @@
 package com.ebravo.taxclassifier.adapter.calculator;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 
 class LatestDateCacheTest {
@@ -34,5 +36,21 @@ class LatestDateCacheTest {
         assertThat(cache.on(MONDAY)).isEqualTo("list of 2027-03-08");
 
         assertThat(reads).containsExactly(MONDAY, TUESDAY, MONDAY);
+    }
+
+    /** A calculator that fails once must be asked again, not answered from the failure. */
+    @Test
+    void failedReadIsNeverCached() {
+        var attempts = new AtomicInteger();
+        var flaky = new LatestDateCache<>(date -> {
+            if (attempts.incrementAndGet() == 1) {
+                throw new IllegalStateException("calculator down");
+            }
+            return "list of " + date;
+        });
+
+        assertThatThrownBy(() -> flaky.on(MONDAY)).hasMessage("calculator down");
+        assertThat(flaky.on(MONDAY)).isEqualTo("list of 2027-03-08");
+        assertThat(attempts).hasValue(2);
     }
 }
