@@ -1,11 +1,13 @@
 package com.ebravo.taxclassifier.adapter.calculator;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.http.HttpMethod.POST;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.content;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
 import com.ebravo.taxclassifier.application.TaxCalculator;
@@ -31,8 +33,11 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.restclient.test.autoconfigure.RestClientTest;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.http.HttpStatus;
 import org.springframework.test.json.JsonCompareMode;
 import org.springframework.test.web.client.MockRestServiceServer;
+import org.springframework.web.client.RestClientException;
+import org.springframework.web.client.RestClientResponseException;
 
 /** Replays responses recorded from the official calculator at tag 1.6.1 for product P001 of the sample CSV. */
 @RestClientTest(
@@ -106,6 +111,27 @@ class CalculatorTaxCalculatorTest {
                 Arguments.of("""
                         {"objetos":[{"nObj":1,"estadoItem":"FALHA_TECNICA","erros":[{"code":"CAL-999","detail":"Erro interno do sistema"}]}]}
                         """, new TechnicalFailure(List.of(new CalculationError("CAL-999", "Erro interno do sistema")))));
+    }
+
+    @Test
+    void unknownItemStateIsNeverAResult() {
+        server.expect(requestTo(REGIME_GERAL))
+                .andRespond(withSuccess("{\"objetos\":[{\"nObj\":1,\"estadoItem\":\"CALCULADO_PARCIAL\"}]}", APPLICATION_JSON));
+
+        assertThatThrownBy(() -> calculator.calculate(RICE, FULL_TAXATION, LATE_EVENING))
+                .isInstanceOf(RestClientException.class)
+                .rootCause()
+                .hasMessageContaining("CALCULADO_PARCIAL");
+    }
+
+    /** The calculator rejects the whole operation with 422, as for an unknown municipality (REG-019), never with a state. */
+    @Test
+    void rejectedOperationIsNeverAResult() {
+        server.expect(requestTo(REGIME_GERAL)).andRespond(withStatus(HttpStatus.UNPROCESSABLE_CONTENT));
+
+        assertThatThrownBy(() -> calculator.calculate(RICE, FULL_TAXATION, LATE_EVENING))
+                .isInstanceOfSatisfying(RestClientResponseException.class,
+                        error -> assertThat(error.getStatusCode().value()).isEqualTo(422));
     }
 
     private static String recorded(String name) {
