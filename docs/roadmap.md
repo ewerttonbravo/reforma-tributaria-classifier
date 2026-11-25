@@ -1,6 +1,6 @@
 # Roadmap
 
-Approved by the maintainer on 2026-11-20; task 03 split into 03a and 03b on 2026-11-21 to stay under the size gate; task 06 split into 06a, 06b and 06c on 2026-11-23, for size and because the legal basis comes from the calculator, not the AI; task 07 split into 07a, 07b and 07c on 2026-11-24 to stay under the size gate. Task 13 took over the malformed record on `produtos` on 2026-11-24, at the elucidation of task 07b. The unit of work is the task: one observable behavior, one small PR.
+Approved by the maintainer on 2026-11-20; task 03 split into 03a and 03b on 2026-11-21 to stay under the size gate; task 06 split into 06a, 06b and 06c on 2026-11-23, for size and because the legal basis comes from the calculator, not the AI; task 07 split into 07a, 07b and 07c on 2026-11-24 to stay under the size gate. Task 08 split into 08a and 08b on 2026-11-25 to stay under the size gate, since the calculator requires nominal rates from 2027 on. Task 13 took over the malformed record on `produtos` on 2026-11-24, at the elucidation of task 07b. The unit of work is the task: one observable behavior, one small PR.
 
 ## Frame of every task
 **Elucidate**, before any code:
@@ -36,8 +36,9 @@ Approved by the maintainer on 2026-11-20; task 03 split into 03a and 03b on 2026
 | 07a | Classify a product | Use case: the official list of the day in São Paulo, the AI's suggestion, the check and the official legal basis give a classification (without legal basis when none is published) or a review with its reason; in-memory fakes | 04, 05, 06b, 06c |
 | 07b | Classification consumer | Consumes `produtos` and publishes to `produtos-classificados` or `produtos-revisao`; confidence threshold from configuration; the publish command does not start the consumer (Testcontainers + fakes) | 03a, 07a |
 | 07c | Official lists cached by date | The calculator adapters read the official list and the legal bases once per date, keeping only the latest date; a failure is never cached | 07a |
-| 08 | Calculate CBS/IBS | Port + `POST /observabilidade/regime-geral` adapter; `estadoItem` → `sealed` result; `dhFatoGerador` at `-03:00`; contract with the official examples | 01 |
-| 09 | Route by estadoItem | Classified with CBS/IBS amounts for `CALCULADO` / `CALCULO_SIMULADO`; `INCONSISTENCIA_ENTRADA` and `REG-011` → review (scenario 4) | 07b, 08 |
+| 08a | Calculate CBS/IBS | Port + `POST /observabilidade/regime-geral` adapter: a product and its suggestion, at an instant sent at `-03:00` and in the municipality from configuration, give a `sealed` result per `estadoItem`, the amounts or the calculator's errors; contract with responses recorded from 1.6.1 | 01 |
+| 08b | Nominal rates from 2027 | From 2027-01-01 the request carries the nominal CBS/IBS rates from configuration, which the calculator requires (`REG-037`), and the result is simulated; before that date none are sent, as the calculator forbids them | 08a |
+| 09 | Route by estadoItem | Classified with CBS/IBS amounts for `CALCULADO` / `CALCULO_SIMULADO`; `INCONSISTENCIA_ENTRADA` and `REG-011` → review (scenario 4) | 07b, 08b |
 | 10 | Manual offset commit | Offset committed only after publishing; a crash before publishing → reprocessed | 09 |
 | 11 | Idempotency | A duplicate message calls the AI only once (scenario 1); PostgreSQL vs H2 decided at elucidation | 10 |
 | 12 | Retry with backoff | Calculator `FALHA_TECNICA` / timeout and AI 429 retried with backoff; calculator goes down and comes back → recovers (scenario 2) | 10 |
