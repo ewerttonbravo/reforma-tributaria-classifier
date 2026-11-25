@@ -9,10 +9,12 @@ import com.ebravo.taxclassifier.application.OfficialCandidates;
 import com.ebravo.taxclassifier.application.OfficialLegalBasis;
 import com.ebravo.taxclassifier.application.ProductPublisher;
 import com.ebravo.taxclassifier.application.TaxCalculator;
+import com.ebravo.taxclassifier.domain.CalculationError;
 import com.ebravo.taxclassifier.domain.LegalBasis;
 import com.ebravo.taxclassifier.domain.Product;
 import com.ebravo.taxclassifier.domain.Suggestion;
 import com.ebravo.taxclassifier.domain.TaxCalculation.Calculated;
+import com.ebravo.taxclassifier.domain.TaxCalculation.InputInconsistency;
 import com.ebravo.taxclassifier.domain.TaxClassification;
 import com.ebravo.taxclassifier.domain.TaxSituation;
 import java.math.BigDecimal;
@@ -57,7 +59,8 @@ class ClassificationListenerTest {
 
     private static final List<TaxSituation> OFFICIAL = List.of(
             new TaxSituation("200", "Alíquota reduzida", List.of(
-                    new TaxClassification("200003", "Vendas de produtos destinados à alimentação humana (Anexo I)"))),
+                    new TaxClassification("200003", "Vendas de produtos destinados à alimentação humana (Anexo I)"),
+                    new TaxClassification("200035", "Fornecimento dos produtos de higiene pessoal e limpeza (Anexo VIII)"))),
             new TaxSituation("220", "Alíquota fixa", List.of(
                     new TaxClassification("220001", "Incorporação imobiliária submetida ao regime especial de tributação"))));
     private static final LegalBasis BASIS_OF_200003 = new LegalBasis("Art. 125", "Art. 125. Ficam reduzidas a zero", "LC 214/2025");
@@ -67,7 +70,11 @@ class ClassificationListenerTest {
             "P002", new Suggestion("200", "200003", new BigDecimal("0.85"), "Feijão parece integrar a cesta básica."),
             "P004", new Suggestion("200", "200003", new BigDecimal("0.95"), "Arroz integra a cesta básica."),
             "P005", new Suggestion("220", "220001", new BigDecimal("0.95"), "Incorporação imobiliária em regime especial."),
-            "P007", new Suggestion("200", "200003", new BigDecimal("0.95"), "Arroz integra a cesta básica."));
+            "P007", new Suggestion("200", "200003", new BigDecimal("0.95"), "Arroz integra a cesta básica."),
+            "P008", new Suggestion("200", "200035", new BigDecimal("0.95"), "Arroz parece ter alíquota reduzida."));
+    /** REG-011 as release 1.6.1 answered it for P001 under 200035. */
+    private static final CalculationError NOT_LINKED = new CalculationError("REG-011",
+            "NCM de código 10063021 não vinculada à Classificação Tributária de código 200035 (CBS e IBS)");
     /** The codes the fake AI was asked about; a code without an answer makes it fail. */
     private static final List<String> ADVISED = new CopyOnWriteArrayList<>();
 
@@ -114,8 +121,21 @@ class ClassificationListenerTest {
                 """
                 {"product":{"code":"P002","description":"Feijão carioca 1kg","ncm":"07133319","price":"8.49"},
                  "suggestion":{"cst":"200","cClassTrib":"200003","confidence":"0.85","justification":"Feijão parece integrar a cesta básica."},
-                 "reason":"LOW_CONFIDENCE"}""",
+                 "reason":"LOW_CONFIDENCE","errors":[]}""",
                 recordWithKey("produtos-revisao", "P002").value(), JSONCompareMode.STRICT);
+    }
+
+    @Test
+    void cClassTribNotLinkedToTheNcmGoesToReviewWithTheCalculatorError() throws Exception {
+        publisher.publish(List.of(new Product("P008", "Arroz tipo 1 5kg", "10063021", new BigDecimal("25.90"))));
+
+        JSONAssert.assertEquals(
+                """
+                {"product":{"code":"P008","description":"Arroz tipo 1 5kg","ncm":"10063021","price":"25.90"},
+                 "suggestion":{"cst":"200","cClassTrib":"200035","confidence":"0.95","justification":"Arroz parece ter alíquota reduzida."},
+                 "reason":"INPUT_INCONSISTENCY",
+                 "errors":[{"code":"REG-011","detail":"%s"}]}""".formatted(NOT_LINKED.detail()),
+                recordWithKey("produtos-revisao", "P008").value(), JSONCompareMode.STRICT);
     }
 
     @Test
@@ -191,12 +211,13 @@ class ClassificationListenerTest {
             };
         }
 
-        /** The amounts of the recorded calculation of P001 in 2026, on each product's price as the base. */
+        /** REG-011 for 200035; otherwise the amounts of the recorded calculation of P001 in 2026, on each product's price as the base. */
         @Bean
         @Primary
         TaxCalculator fakeCalculator() {
-            return (product, suggestion, taxableEvent) ->
-                    new Calculated(product.price(), new BigDecimal("0.23"), new BigDecimal("0.03"), false);
+            return (product, suggestion, taxableEvent) -> suggestion.cClassTrib().equals("200035")
+                    ? new InputInconsistency(List.of(NOT_LINKED))
+                    : new Calculated(product.price(), new BigDecimal("0.23"), new BigDecimal("0.03"), false);
         }
 
         @Bean

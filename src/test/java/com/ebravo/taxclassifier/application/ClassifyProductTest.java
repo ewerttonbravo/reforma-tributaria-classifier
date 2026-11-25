@@ -2,6 +2,7 @@ package com.ebravo.taxclassifier.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.ebravo.taxclassifier.domain.CalculationError;
 import com.ebravo.taxclassifier.domain.Classification.Classified;
 import com.ebravo.taxclassifier.domain.Classification.ToReview;
 import com.ebravo.taxclassifier.domain.LegalBasis;
@@ -11,6 +12,8 @@ import com.ebravo.taxclassifier.domain.Suggestion;
 import com.ebravo.taxclassifier.domain.SuggestionCheck;
 import com.ebravo.taxclassifier.domain.TaxCalculation;
 import com.ebravo.taxclassifier.domain.TaxCalculation.Calculated;
+import com.ebravo.taxclassifier.domain.TaxCalculation.InputInconsistency;
+import com.ebravo.taxclassifier.domain.TaxCalculation.NotImplemented;
 import com.ebravo.taxclassifier.domain.TaxClassification;
 import com.ebravo.taxclassifier.domain.TaxSituation;
 import java.math.BigDecimal;
@@ -21,9 +24,12 @@ import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.MethodSource;
 
 class ClassifyProductTest {
 
@@ -80,9 +86,30 @@ class ClassifyProductTest {
 
         var classification = classifyAt(NOON_IN_SAO_PAULO).classify(PRODUCT);
 
-        assertThat(classification).isEqualTo(new ToReview(answer, reason));
+        assertThat(classification).isEqualTo(new ToReview(answer, reason, List.of()));
         assertThat(calculations).isEmpty();
         assertThat(legalBasisRequests).isEmpty();
+    }
+
+    @ParameterizedTest
+    @MethodSource("calculatorRejections")
+    void calculatorRejectionGoesToReviewWithItsErrors(TaxCalculation rejection, List<CalculationError> errors, ReviewReason reason) {
+        answer = new Suggestion("200", "200003", new BigDecimal("0.95"), "Arroz integra a cesta básica.");
+        calculation = rejection;
+
+        var classification = classifyAt(NOON_IN_SAO_PAULO).classify(PRODUCT);
+
+        assertThat(classification).isEqualTo(new ToReview(answer, reason, errors));
+        assertThat(legalBasisRequests).isEmpty();
+    }
+
+    /** Errors as release 1.6.1 answered them; REG-036 and REG-037 are INCONSISTENCIA_ENTRADA too and take the same path. */
+    static Stream<Arguments> calculatorRejections() {
+        var notLinked = List.of(new CalculationError("REG-011", "NCM de código 10063021 não vinculada à Classificação Tributária de código 200035 (CBS e IBS)"));
+        var notImplemented = List.of(new CalculationError("CAL-007", "A classificação tributária 620001 ainda não possui tratamento tributário implementado na Calculadora. Essa funcionalidade está prevista no roadmap e será disponibilizada em versão futura."));
+        return Stream.of(
+                Arguments.of(new InputInconsistency(notLinked), notLinked, ReviewReason.INPUT_INCONSISTENCY),
+                Arguments.of(new NotImplemented(notImplemented), notImplemented, ReviewReason.NOT_IMPLEMENTED));
     }
 
     @ParameterizedTest

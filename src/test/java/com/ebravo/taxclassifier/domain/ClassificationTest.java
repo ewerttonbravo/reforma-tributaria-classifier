@@ -6,6 +6,7 @@ import com.ebravo.taxclassifier.domain.Classification.Classified;
 import com.ebravo.taxclassifier.domain.Classification.ToReview;
 import com.ebravo.taxclassifier.domain.TaxCalculation.Calculated;
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
@@ -16,7 +17,12 @@ class ClassificationTest {
 
     @Test
     void reviewAlwaysCarriesAReason() {
-        assertThatNullPointerException().isThrownBy(() -> new ToReview(SUGGESTION, null)).withMessage("reason");
+        assertThatNullPointerException().isThrownBy(() -> new ToReview(SUGGESTION, null, List.of())).withMessage("reason");
+    }
+
+    @Test
+    void reviewWithoutCalculatorErrorsHasAnEmptyListNeverNull() {
+        assertThatNullPointerException().isThrownBy(() -> new ToReview(SUGGESTION, ReviewReason.LOW_CONFIDENCE, null));
     }
 
     @Test
