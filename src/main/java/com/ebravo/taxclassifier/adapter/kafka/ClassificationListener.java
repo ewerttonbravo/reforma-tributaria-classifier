@@ -39,7 +39,8 @@ class ClassificationListener {
                     new ClassifiedMessage(message, SuggestionMessage.of(suggestion), legalBasis.orElse(null),
                             CalculationMessage.of(calculation)));
             case ToReview(var suggestion, var reason, var errors) -> send(REVIEW_TOPIC, product,
-                    new ReviewMessage(message, SuggestionMessage.of(suggestion), reason, errors));
+                    new ReviewMessage(message, SuggestionMessage.of(suggestion), reason,
+                            errors.stream().map(ErrorMessage::of).toList()));
         }
     }
 
@@ -68,6 +69,13 @@ class ClassificationListener {
     record ClassifiedMessage(
             ProductMessage product, SuggestionMessage suggestion, LegalBasis legalBasis, CalculationMessage calculation) {}
 
+    record ErrorMessage(String code, String detail) {
+
+        static ErrorMessage of(CalculationError error) {
+            return new ErrorMessage(error.code(), error.detail());
+        }
+    }
+
     record ReviewMessage(
-            ProductMessage product, SuggestionMessage suggestion, ReviewReason reason, List<CalculationError> errors) {}
+            ProductMessage product, SuggestionMessage suggestion, ReviewReason reason, List<ErrorMessage> errors) {}
 }
