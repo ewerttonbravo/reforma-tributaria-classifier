@@ -15,6 +15,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -50,7 +51,8 @@ class CalculatorTaxCalculator implements TaxCalculator {
 
     @Override
     public TaxCalculation calculate(Product product, Suggestion suggestion, Instant taxableEvent) {
-        var taxableEventInSaoPaulo = taxableEvent.atZone(SAO_PAULO).toOffsetDateTime();
+        // Release 1.6.1 rejects fractions of a second; cutting them never changes the day or the year.
+        var taxableEventInSaoPaulo = taxableEvent.truncatedTo(ChronoUnit.SECONDS).atZone(SAO_PAULO).toOffsetDateTime();
         var rates = taxableEventInSaoPaulo.getYear() >= FIRST_YEAR_OF_NOMINAL_RATES ? nominalRates : null;
         var item = new ItemRequest(1, product.ncm(), suggestion.cst(), suggestion.cClassTrib(), product.price(), rates);
         var request = new OperationRequest(product.code(), "1.0.0", taxableEventInSaoPaulo, municipality, uf, List.of(item));
