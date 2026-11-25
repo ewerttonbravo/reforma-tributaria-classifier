@@ -20,6 +20,7 @@ final class LatestDateCache<T> {
     }
 
     T on(LocalDate date) {
+        Objects.requireNonNull(date, "date");
         var entry = latest;
         if (entry == null || !entry.date().equals(date)) {
             entry = new Entry<>(date, Objects.requireNonNull(read.apply(date), () -> "value read for " + date));
