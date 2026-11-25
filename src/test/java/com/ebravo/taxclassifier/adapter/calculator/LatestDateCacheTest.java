@@ -66,4 +66,13 @@ class LatestDateCacheTest {
         assertThat(emptyOnce.on(MONDAY)).isEqualTo("list of 2027-03-08");
         assertThat(attempts).hasValue(2);
     }
+
+    /** A null date kept as the entry would break every later call, whatever its date. */
+    @Test
+    void nullDateIsRejectedBeforeAnyRead() {
+        assertThatThrownBy(() -> cache.on(null))
+                .isInstanceOf(NullPointerException.class)
+                .hasMessage("date");
+        assertThat(reads).isEmpty();
+    }
 }
