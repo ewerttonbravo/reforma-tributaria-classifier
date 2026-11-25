@@ -6,6 +6,7 @@ import com.ebravo.taxclassifier.domain.Classification.ToReview;
 import com.ebravo.taxclassifier.domain.Product;
 import com.ebravo.taxclassifier.domain.SuggestionCheck;
 import com.ebravo.taxclassifier.domain.ReviewReason;
+import com.ebravo.taxclassifier.domain.Suggestion;
 import com.ebravo.taxclassifier.domain.TaxCalculation.Calculated;
 import com.ebravo.taxclassifier.domain.TaxCalculation.InputInconsistency;
 import com.ebravo.taxclassifier.domain.TaxCalculation.NotImplemented;
@@ -13,6 +14,7 @@ import com.ebravo.taxclassifier.domain.TaxCalculation.TechnicalFailure;
 import com.ebravo.taxclassifier.domain.Verdict.Accepted;
 import com.ebravo.taxclassifier.domain.Verdict.NeedsReview;
 import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.List;
@@ -47,13 +49,18 @@ public final class ClassifyProduct {
         var today = LocalDate.ofInstant(now, SAO_PAULO);
         var official = candidates.on(today);
         return switch (check.check(advisor.suggest(product, official), official)) {
-            case Accepted(var suggestion) -> switch (calculator.calculate(product, suggestion, now)) {
-                case Calculated calculation -> new Classified(suggestion, legalBasis.of(suggestion.cClassTrib(), today), calculation);
-                case InputInconsistency(var errors) -> new ToReview(suggestion, ReviewReason.INPUT_INCONSISTENCY, errors);
-                case NotImplemented(var errors) -> new ToReview(suggestion, ReviewReason.NOT_IMPLEMENTED, errors);
-                case TechnicalFailure(var errors) -> throw new CalculationFailed(errors);
-            };
+            case Accepted(var suggestion) -> calculate(product, suggestion, now, today);
             case NeedsReview(var suggestion, var reason) -> new ToReview(suggestion, reason, List.of());
+        };
+    }
+
+    /** Only a calculated suggestion stands, so only it needs its legal basis. */
+    private Classification calculate(Product product, Suggestion suggestion, Instant now, LocalDate today) {
+        return switch (calculator.calculate(product, suggestion, now)) {
+            case Calculated calculation -> new Classified(suggestion, legalBasis.of(suggestion.cClassTrib(), today), calculation);
+            case InputInconsistency(var errors) -> new ToReview(suggestion, ReviewReason.INPUT_INCONSISTENCY, errors);
+            case NotImplemented(var errors) -> new ToReview(suggestion, ReviewReason.NOT_IMPLEMENTED, errors);
+            case TechnicalFailure(var errors) -> throw new CalculationFailed(errors);
         };
     }
 }
