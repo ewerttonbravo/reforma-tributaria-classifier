@@ -80,6 +80,16 @@ class CalculatorTaxCalculatorTest {
                 new Calculated(new BigDecimal("25.90"), new BigDecimal("0.23"), new BigDecimal("0.03"), false));
     }
 
+    /** Release 1.6.1 calculates an immunity (CST 410) with no amounts on the item; only the operation's total carries them. */
+    @Test
+    void immuneItemIsCalculatedAtZero() {
+        server.expect(requestTo(REGIME_GERAL))
+                .andRespond(withSuccess(recorded("regime-geral-p001-2026-imune.json"), APPLICATION_JSON));
+
+        assertThat(calculator.calculate(RICE, FULL_TAXATION, LATE_EVENING)).isEqualTo(
+                new Calculated(new BigDecimal("0.00"), new BigDecimal("0.00"), new BigDecimal("0.00"), false));
+    }
+
     /** Recorded for 2027-01-04 with nominal rates of 8.8, 0.1 and 0.0; sending them is task 08b. */
     @Test
     void calculationOnNominalRatesIsFlaggedSimulated() {
