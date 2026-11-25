@@ -53,4 +53,17 @@ class LatestDateCacheTest {
         assertThat(flaky.on(MONDAY)).isEqualTo("list of 2027-03-08");
         assertThat(attempts).hasValue(2);
     }
+
+    /** A response with no body reads as null; kept, it would fail every product of the day without a new request. */
+    @Test
+    void missingValueIsAFailureNeverCached() {
+        var attempts = new AtomicInteger();
+        var emptyOnce = new LatestDateCache<>(date -> attempts.incrementAndGet() == 1 ? null : "list of " + date);
+
+        assertThatThrownBy(() -> emptyOnce.on(MONDAY))
+                .isInstanceOf(NullPointerException.class)
+                .hasMessage("value read for 2027-03-08");
+        assertThat(emptyOnce.on(MONDAY)).isEqualTo("list of 2027-03-08");
+        assertThat(attempts).hasValue(2);
+    }
 }
