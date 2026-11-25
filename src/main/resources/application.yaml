@@ -25,6 +25,9 @@ spring:
         spring.json.use.type.headers: false
 calculator:
   base-url: http://localhost:8080/api/calculadora
+  # Where the operation takes place (IBGE code); the products CSV has no location.
+  municipality: 3550308
+  uf: SP
 classification:
   confidence-threshold: 0.80
 ai:
