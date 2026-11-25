@@ -52,7 +52,8 @@ class CalculatorTaxCalculator implements TaxCalculator {
                 .objetos()
                 .getFirst();
         return switch (answer.estadoItem()) {
-            case CALCULADO -> answer.calculated();
+            case CALCULADO -> answer.calculated(false);
+            case CALCULO_SIMULADO -> answer.calculated(true);
             case INCONSISTENCIA_ENTRADA -> new InputInconsistency(answer.errors());
             case NAO_IMPLEMENTADO -> new NotImplemented(answer.errors());
             case FALHA_TECNICA -> new TechnicalFailure(answer.errors());
@@ -67,13 +68,13 @@ class CalculatorTaxCalculator implements TaxCalculator {
     record OperationResponse(List<ItemResponse> objetos) {}
 
     /** A state this adapter does not know fails the parse, so it never passes for a result. */
-    enum ItemState { CALCULADO, INCONSISTENCIA_ENTRADA, NAO_IMPLEMENTADO, FALHA_TECNICA }
+    enum ItemState { CALCULADO, CALCULO_SIMULADO, INCONSISTENCIA_ENTRADA, NAO_IMPLEMENTADO, FALHA_TECNICA }
 
     record ItemResponse(ItemState estadoItem, TaxesResponse tribCalc, List<ErrorResponse> erros) {
 
-        Calculated calculated() {
+        Calculated calculated(boolean simulated) {
             var amounts = tribCalc.ibsCbs().gIBSCBS();
-            return new Calculated(amounts.vBC(), amounts.gCBS().vCBS(), amounts.vIBS(), false);
+            return new Calculated(amounts.vBC(), amounts.gCBS().vCBS(), amounts.vIBS(), simulated);
         }
 
         List<CalculationError> errors() {
