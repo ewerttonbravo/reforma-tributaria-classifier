@@ -1,10 +1,14 @@
 package com.ebravo.taxclassifier.adapter.calculator;
 
 import com.ebravo.taxclassifier.application.TaxCalculator;
+import com.ebravo.taxclassifier.domain.CalculationError;
 import com.ebravo.taxclassifier.domain.Product;
 import com.ebravo.taxclassifier.domain.Suggestion;
 import com.ebravo.taxclassifier.domain.TaxCalculation;
 import com.ebravo.taxclassifier.domain.TaxCalculation.Calculated;
+import com.ebravo.taxclassifier.domain.TaxCalculation.InputInconsistency;
+import com.ebravo.taxclassifier.domain.TaxCalculation.NotImplemented;
+import com.ebravo.taxclassifier.domain.TaxCalculation.TechnicalFailure;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -47,8 +51,12 @@ class CalculatorTaxCalculator implements TaxCalculator {
                 .body(OperationResponse.class)
                 .objetos()
                 .getFirst();
-        var amounts = answer.tribCalc().ibsCbs().gIBSCBS();
-        return new Calculated(amounts.vBC(), amounts.gCBS().vCBS(), amounts.vIBS(), false);
+        return switch (answer.estadoItem()) {
+            case CALCULADO -> answer.calculated();
+            case INCONSISTENCIA_ENTRADA -> new InputInconsistency(answer.errors());
+            case NAO_IMPLEMENTADO -> new NotImplemented(answer.errors());
+            case FALHA_TECNICA -> new TechnicalFailure(answer.errors());
+        };
     }
 
     /** The calculator's field names; one item per product. */
@@ -58,7 +66,23 @@ class CalculatorTaxCalculator implements TaxCalculator {
 
     record OperationResponse(List<ItemResponse> objetos) {}
 
-    record ItemResponse(TaxesResponse tribCalc) {}
+    /** A state this adapter does not know fails the parse, so it never passes for a result. */
+    enum ItemState { CALCULADO, INCONSISTENCIA_ENTRADA, NAO_IMPLEMENTADO, FALHA_TECNICA }
+
+    record ItemResponse(ItemState estadoItem, TaxesResponse tribCalc, List<ErrorResponse> erros) {
+
+        Calculated calculated() {
+            var amounts = tribCalc.ibsCbs().gIBSCBS();
+            return new Calculated(amounts.vBC(), amounts.gCBS().vCBS(), amounts.vIBS(), false);
+        }
+
+        List<CalculationError> errors() {
+            return erros.stream().map(error -> new CalculationError(error.code(), error.detail())).toList();
+        }
+    }
+
+    /** The type, title and pointer stay out: the code names the error and the detail explains it. */
+    record ErrorResponse(String code, String detail) {}
 
     record TaxesResponse(@JsonProperty("IBSCBS") IbsCbsResponse ibsCbs) {}
 
