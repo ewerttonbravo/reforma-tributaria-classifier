@@ -75,6 +75,16 @@ class CalculatorTaxCalculatorTest {
                 new Calculated(new BigDecimal("25.90"), new BigDecimal("0.23"), new BigDecimal("0.03"), false));
     }
 
+    /** Recorded for 2027-01-04 with nominal rates of 8.8, 0.1 and 0.0; sending them is task 08b. */
+    @Test
+    void calculationOnNominalRatesIsFlaggedSimulated() {
+        server.expect(requestTo(REGIME_GERAL))
+                .andRespond(withSuccess(recorded("regime-geral-p001-2027-simulado.json"), APPLICATION_JSON));
+
+        assertThat(calculator.calculate(RICE, FULL_TAXATION, LATE_EVENING)).isEqualTo(
+                new Calculated(new BigDecimal("25.90"), new BigDecimal("2.28"), new BigDecimal("0.03"), true));
+    }
+
     @ParameterizedTest
     @MethodSource("uncalculatedItems")
     void uncalculatedItemCarriesTheCalculatorErrors(String response, TaxCalculation expected) {
