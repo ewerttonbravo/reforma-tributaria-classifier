@@ -14,6 +14,7 @@ import org.springframework.web.client.RestClient;
 class CalculatorOfficialCandidates implements OfficialCandidates {
 
     private final RestClient calculator;
+    private final LatestDateCache<List<TaxSituation>> cache = new LatestDateCache<>(this::read);
 
     CalculatorOfficialCandidates(RestClient.Builder builder, @Value("${calculator.base-url}") String baseUrl) {
         this.calculator = builder.baseUrl(baseUrl).build();
@@ -21,6 +22,10 @@ class CalculatorOfficialCandidates implements OfficialCandidates {
 
     @Override
     public List<TaxSituation> on(LocalDate date) {
+        return cache.on(date);
+    }
+
+    private List<TaxSituation> read(LocalDate date) {
         return calculator.get()
                 .uri("/dados-abertos/situacoes-tributarias/cbs-ibs?data={date}", date)
                 .retrieve()

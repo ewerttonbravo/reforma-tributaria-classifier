@@ -20,6 +20,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.restclient.test.autoconfigure.RestClientTest;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClientResponseException;
 
@@ -27,6 +28,8 @@ import org.springframework.web.client.RestClientResponseException;
 @RestClientTest(
         components = CalculatorOfficialCandidates.class,
         properties = "calculator.base-url=http://calculator/api/calculadora")
+// The adapter keeps the last date read, so each test gets its own.
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_EACH_TEST_METHOD)
 class CalculatorOfficialCandidatesTest {
 
     private static final String LIST_FOR_DATE =
