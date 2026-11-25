@@ -45,7 +45,10 @@ import org.springframework.web.client.RestClientResponseException;
         properties = {
             "calculator.base-url=http://calculator/api/calculadora",
             "calculator.municipality=3550308",
-            "calculator.uf=SP"
+            "calculator.uf=SP",
+            "calculator.nominal-rates.cbs=8.8",
+            "calculator.nominal-rates.ibs-state=0.05",
+            "calculator.nominal-rates.ibs-municipal=0.05"
         })
 class CalculatorTaxCalculatorTest {
 
@@ -58,6 +61,9 @@ class CalculatorTaxCalculatorTest {
 
     /** Already 2026-11-26 in UTC, still 2026-11-25 in São Paulo. */
     private static final Instant LATE_EVENING = Instant.parse("2026-11-26T02:30:00Z");
+
+    /** Midnight of 2027-01-01 in São Paulo. */
+    private static final Instant FIRST_INSTANT_OF_2027 = Instant.parse("2027-01-01T03:00:00Z");
 
     @Autowired
     private TaxCalculator calculator;
@@ -80,6 +86,19 @@ class CalculatorTaxCalculatorTest {
                 new Calculated(new BigDecimal("25.90"), new BigDecimal("0.23"), new BigDecimal("0.03"), false));
     }
 
+    /** Already 2027 in UTC, still 2026 in São Paulo, where release 1.6.1 forbids the rates (REG-036). */
+    @Test
+    void lastInstantOf2026InSaoPauloCarriesNoRates() {
+        var request = recorded("regime-geral-p001-2026-request.json").replace("2026-11-25T23:30:00", "2026-12-31T23:59:59");
+        server.expect(requestTo(REGIME_GERAL))
+                .andExpect(content().json(request, JsonCompareMode.STRICT))
+                .andRespond(withSuccess(recorded("regime-geral-p001-2026-calculado.json"), APPLICATION_JSON));
+
+        calculator.calculate(RICE, FULL_TAXATION, Instant.parse("2027-01-01T02:59:59Z"));
+
+        server.verify();
+    }
+
     /** Release 1.6.1 calculates an immunity (CST 410) with no amounts on the item; only the operation's total carries them. */
     @Test
     void immuneItemIsCalculatedAtZero() {
@@ -90,13 +109,17 @@ class CalculatorTaxCalculatorTest {
                 new Calculated(new BigDecimal("0.00"), new BigDecimal("0.00"), new BigDecimal("0.00"), false));
     }
 
-    /** Recorded for 2027-01-04 with nominal rates of 8.8, 0.1 and 0.0; sending them is task 08b. */
+    /** From 2027 release 1.6.1 requires the nominal rates (REG-037 without them) and flags the calculation as simulated. */
     @Test
-    void calculationOnNominalRatesIsFlaggedSimulated() {
+    void eventFrom2027CarriesTheNominalRates() {
         server.expect(requestTo(REGIME_GERAL))
+                .andExpect(content().json(recorded("regime-geral-p001-2027-request.json"), JsonCompareMode.STRICT))
                 .andRespond(withSuccess(recorded("regime-geral-p001-2027-simulado.json"), APPLICATION_JSON));
 
-        assertThat(calculator.calculate(RICE, FULL_TAXATION, LATE_EVENING)).isEqualTo(
+        var calculation = calculator.calculate(RICE, FULL_TAXATION, FIRST_INSTANT_OF_2027);
+
+        server.verify();
+        assertThat(calculation).isEqualTo(
                 new Calculated(new BigDecimal("25.90"), new BigDecimal("2.28"), new BigDecimal("0.03"), true));
     }
 

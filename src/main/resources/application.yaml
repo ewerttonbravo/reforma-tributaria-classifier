@@ -28,6 +28,11 @@ calculator:
   # Where the operation takes place (IBGE code); the products CSV has no location.
   municipality: 3550308
   uf: SP
+  # Percent rates for taxable events from 2027 on, which the calculator requires; the official example's values.
+  nominal-rates:
+    cbs: 8.8
+    ibs-state: 0.05
+    ibs-municipal: 0.05
 classification:
   confidence-threshold: 0.80
 ai:
