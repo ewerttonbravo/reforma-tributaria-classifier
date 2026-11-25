@@ -9,6 +9,7 @@ import com.ebravo.taxclassifier.domain.ReviewReason;
 import com.ebravo.taxclassifier.domain.TaxCalculation.Calculated;
 import com.ebravo.taxclassifier.domain.TaxCalculation.InputInconsistency;
 import com.ebravo.taxclassifier.domain.TaxCalculation.NotImplemented;
+import com.ebravo.taxclassifier.domain.TaxCalculation.TechnicalFailure;
 import com.ebravo.taxclassifier.domain.Verdict.Accepted;
 import com.ebravo.taxclassifier.domain.Verdict.NeedsReview;
 import java.time.Clock;
@@ -50,7 +51,7 @@ public final class ClassifyProduct {
                 case Calculated calculation -> new Classified(suggestion, legalBasis.of(suggestion.cClassTrib(), today), calculation);
                 case InputInconsistency(var errors) -> new ToReview(suggestion, ReviewReason.INPUT_INCONSISTENCY, errors);
                 case NotImplemented(var errors) -> new ToReview(suggestion, ReviewReason.NOT_IMPLEMENTED, errors);
-                default -> throw new UnsupportedOperationException("routed in the next cycle");
+                case TechnicalFailure(var errors) -> throw new CalculationFailed(errors);
             };
             case NeedsReview(var suggestion, var reason) -> new ToReview(suggestion, reason, List.of());
         };
