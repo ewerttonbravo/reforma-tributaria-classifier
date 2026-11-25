@@ -61,6 +61,19 @@ class CalculatorOfficialCandidatesTest {
                         "Documento com exclusão da BC da CBS e do IBS de energia elétrica fornecida pela distribuidora à UC"))));
     }
 
+    /** The server expects one request, so a second one for the same date fails the test. */
+    @Test
+    void officialListIsReadOncePerDate() {
+        calculator.expect(requestTo(LIST_FOR_DATE + "2027-03-10"))
+                .andRespond(withSuccess(recorded("situacoes-tributarias-cbs-ibs-2027-03-10.json"), APPLICATION_JSON));
+
+        var first = candidates.on(LocalDate.of(2027, 3, 10));
+        var second = candidates.on(LocalDate.of(2027, 3, 10));
+
+        calculator.verify();
+        assertThat(second).isEqualTo(first).hasSize(18);
+    }
+
     @Test
     void dateWithNoOfficialListGivesAnEmptyList() {
         calculator.expect(requestTo(LIST_FOR_DATE + "2020-01-01"))
