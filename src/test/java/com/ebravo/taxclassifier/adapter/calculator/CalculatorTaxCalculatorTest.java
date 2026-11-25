@@ -86,6 +86,19 @@ class CalculatorTaxCalculatorTest {
                 new Calculated(new BigDecimal("25.90"), new BigDecimal("0.23"), new BigDecimal("0.03"), false));
     }
 
+    /** Already 2027 in UTC, still 2026 in São Paulo, where release 1.6.1 forbids the rates (REG-036). */
+    @Test
+    void lastInstantOf2026InSaoPauloCarriesNoRates() {
+        var request = recorded("regime-geral-p001-2026-request.json").replace("2026-11-25T23:30:00", "2026-12-31T23:59:59");
+        server.expect(requestTo(REGIME_GERAL))
+                .andExpect(content().json(request, JsonCompareMode.STRICT))
+                .andRespond(withSuccess(recorded("regime-geral-p001-2026-calculado.json"), APPLICATION_JSON));
+
+        calculator.calculate(RICE, FULL_TAXATION, Instant.parse("2027-01-01T02:59:59Z"));
+
+        server.verify();
+    }
+
     /** Release 1.6.1 calculates an immunity (CST 410) with no amounts on the item; only the operation's total carries them. */
     @Test
     void immuneItemIsCalculatedAtZero() {
