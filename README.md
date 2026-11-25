@@ -54,7 +54,7 @@ docker compose exec kafka /opt/kafka/bin/kafka-console-consumer.sh --bootstrap-s
 
 ## Run the official calculator
 
-The service calls the [official tax calculator](https://github.com/ReceitaFederal/calculadora-rtc-regime-regular) of the Receita Federal, pinned at tag `1.6.1` (commit `150cccb`). It runs as a separate process on port 8080; the service finds it at the `calculator.base-url` property, `http://localhost:8080/api/calculadora` by default. Calculations take place in the municipality of `calculator.municipality` (IBGE code) and `calculator.uf`, São Paulo (`3550308`, `SP`) by default. Tests never need it: the contract tests of tasks 04, 06c and 08a replay its responses recorded in `src/test/resources/calculator/1.6.1/`.
+The service calls the [official tax calculator](https://github.com/ReceitaFederal/calculadora-rtc-regime-regular) of the Receita Federal, pinned at tag `1.6.1` (commit `150cccb`). It runs as a separate process on port 8080; the service finds it at the `calculator.base-url` property, `http://localhost:8080/api/calculadora` by default. Calculations take place in the municipality of `calculator.municipality` (IBGE code) and `calculator.uf`, São Paulo (`3550308`, `SP`) by default. From 2027-01-01 the calculator requires nominal rates, in percent, which come from `calculator.nominal-rates.cbs`, `.ibs-state` and `.ibs-municipal` (8.8, 0.05 and 0.05 by default), and the calculation is simulated. Tests never need it: the contract tests of tasks 04, 06c, 08a and 08b replay its responses recorded in `src/test/resources/calculator/1.6.1/`.
 
 Clone it outside this repository and build it with JDK 25:
 
@@ -91,8 +91,7 @@ post < $R | cmp - $F/regime-geral-p001-2026-calculado.json
 sed 's/"cst":"000","cClassTrib":"000001"/"cst":"410","cClassTrib":"410001"/' $R | post | cmp - $F/regime-geral-p001-2026-imune.json
 sed 's/"cst":"000","cClassTrib":"000001"/"cst":"200","cClassTrib":"200035"/' $R | post | cmp - $F/regime-geral-p001-2026-reg011.json
 sed 's/"cst":"000","cClassTrib":"000001"/"cst":"620","cClassTrib":"620001"/' $R | post | cmp - $F/regime-geral-p001-2026-nao-implementado.json
-sed -e 's/2026-11-25T23:30/2027-01-04T10:00/' -e 's/"baseCalculo":25.90/&,"aliquotasNominais":{"cbs":8.8,"ibsEstadual":0.1,"ibsMunicipal":0.0}/' $R \
-  | post | cmp - $F/regime-geral-p001-2027-simulado.json
+post < $F/regime-geral-p001-2027-request.json | cmp - $F/regime-geral-p001-2027-simulado.json
 ```
 
 `cmp` prints nothing when the response matches the fixture. The 400 fixture, `situacoes-tributarias-cbs-ibs-invalid-date-400.json` (from `?data=xx`), is left out: it carries a timestamp. The headers fixture keeps only the status line (verbatim, trailing space included), the version headers and `x-warning-dados-simulados`.
