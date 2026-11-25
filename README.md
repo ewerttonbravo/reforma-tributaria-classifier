@@ -6,7 +6,7 @@ Suggests the CST and `cClassTrib` of each product in a catalog for Brazil's cons
 
 ## Status
 
-Skeleton, the official calculator and publishing a products CSV to Kafka: the build, the layer rules, the quality gates, the pinned calculator with its recorded responses, the CSV rules, the `produtos` topic, the publish command, and the classification service: the AI chooses from the official CST and `cClassTrib` list of the calculator, and each product goes to `produtos-classificados` or to `produtos-revisao`. See the [roadmap](docs/roadmap.md).
+Skeleton, the official calculator and publishing a products CSV to Kafka: the build, the layer rules, the quality gates, the pinned calculator with its recorded responses, the CSV rules, the `produtos` topic, the publish command, and the classification service: the AI chooses from the official CST and `cClassTrib` list of the calculator, the calculator calculates CBS and IBS under that choice, and each product goes to `produtos-classificados` or to `produtos-revisao` by the calculator's answer. See the [roadmap](docs/roadmap.md).
 
 ## Build and test
 
@@ -105,7 +105,7 @@ export ANTHROPIC_API_KEY=...                # every product is one paid call to 
 java -jar target/tax-classifier.jar         # Ctrl-C to stop
 ```
 
-The service consumes `produtos` as the consumer group `tax-classifier`, from the earliest offset on its first run. An accepted suggestion goes to `produtos-classificados` with the official legal basis (`null` when none is published); a suggestion outside the official list or below the confidence threshold goes to `produtos-revisao` with its reason. The threshold is 0.80; change it with `--classification.confidence-threshold=0.90`. Until retries exist (task 12), a product whose classification fails is logged and skipped, and so is a record on `produtos` that is not a product's JSON.
+The service consumes `produtos` as the consumer group `tax-classifier`, from the earliest offset on its first run. An accepted suggestion is calculated by the official calculator: when it calculates, the product goes to `produtos-classificados` with the official legal basis (`null` when none is published) and the CBS and IBS amounts, flagged `simulated` from 2027; when it rejects the item (`INCONSISTENCIA_ENTRADA`, such as `REG-011` for a `cClassTrib` not linked to the NCM, or `NAO_IMPLEMENTADO`), the product goes to `produtos-revisao` with the calculator's errors. A suggestion outside the official list or below the confidence threshold goes to `produtos-revisao` with its reason, without being calculated. The threshold is 0.80; change it with `--classification.confidence-threshold=0.90`. Until retries exist (task 12), a product whose classification fails, a calculator `FALHA_TECNICA` included, is logged and skipped, and so is a record on `produtos` that is not a product's JSON.
 
 See the results:
 

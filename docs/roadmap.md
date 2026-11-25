@@ -52,6 +52,5 @@ Tasks 10 to 15 each close with their section in `docs/failure-scenarios.md`.
 
 ## Open decisions (settled at the elucidation of the task shown)
 - **12 × 14:** non-blocking retry (`@RetryableTopic`) moves the message to retry topics and breaks per-product ordering, which scenario 5 requires. Blocking retry (`DefaultErrorHandler` with backoff) keeps the order but stalls the partition.
-- **09:** where `NAO_IMPLEMENTADO` is routed.
 
 The order follows the phases: base, AI classification, calculation, resilience, proof. Task 01 comes early because the official calculator is the largest external unknown.
