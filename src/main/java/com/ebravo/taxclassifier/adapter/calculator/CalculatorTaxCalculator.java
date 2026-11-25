@@ -44,16 +44,15 @@ class CalculatorTaxCalculator implements TaxCalculator {
         var item = new ItemRequest(1, product.ncm(), suggestion.cst(), suggestion.cClassTrib(), product.price());
         var request = new OperationRequest(product.code(), "1.0.0",
                 taxableEvent.atZone(SAO_PAULO).toOffsetDateTime(), municipality, uf, List.of(item));
-        var answer = calculator.post()
+        var response = calculator.post()
                 .uri("/observabilidade/regime-geral")
                 .body(request)
                 .retrieve()
-                .body(OperationResponse.class)
-                .objetos()
-                .getFirst();
+                .body(OperationResponse.class);
+        var answer = response.objetos().getFirst();
         return switch (answer.estadoItem()) {
-            case CALCULADO -> answer.calculated(false);
-            case CALCULO_SIMULADO -> answer.calculated(true);
+            case CALCULADO -> response.calculated(false);
+            case CALCULO_SIMULADO -> response.calculated(true);
             case INCONSISTENCIA_ENTRADA -> new InputInconsistency(answer.errors());
             case NAO_IMPLEMENTADO -> new NotImplemented(answer.errors());
             case FALHA_TECNICA -> new TechnicalFailure(answer.errors());
@@ -65,17 +64,22 @@ class CalculatorTaxCalculator implements TaxCalculator {
 
     record ItemRequest(int numero, String ncm, String cst, String cClassTrib, BigDecimal baseCalculo) {}
 
-    record OperationResponse(List<ItemResponse> objetos) {}
+    /**
+     * The amounts are read from the operation's total, which is the item's own as the operation has one item: release 1.6.1
+     * leaves them off the item for an immunity (CST 410) but always totals them.
+     */
+    record OperationResponse(List<ItemResponse> objetos, TotalResponse total) {
+
+        Calculated calculated(boolean simulated) {
+            var amounts = total.tribCalc().ibsCbs();
+            return new Calculated(amounts.vBCIBSCBS(), amounts.gCBS().vCBS(), amounts.gIBS().vIBS(), simulated);
+        }
+    }
 
     /** A state this adapter does not know fails the parse, so it never passes for a result. */
     enum ItemState { CALCULADO, CALCULO_SIMULADO, INCONSISTENCIA_ENTRADA, NAO_IMPLEMENTADO, FALHA_TECNICA }
 
-    record ItemResponse(ItemState estadoItem, TaxesResponse tribCalc, List<ErrorResponse> erros) {
-
-        Calculated calculated(boolean simulated) {
-            var amounts = tribCalc.ibsCbs().gIBSCBS();
-            return new Calculated(amounts.vBC(), amounts.gCBS().vCBS(), amounts.vIBS(), simulated);
-        }
+    record ItemResponse(ItemState estadoItem, List<ErrorResponse> erros) {
 
         List<CalculationError> errors() {
             return erros.stream().map(error -> new CalculationError(error.code(), error.detail())).toList();
@@ -85,11 +89,13 @@ class CalculatorTaxCalculator implements TaxCalculator {
     /** The type, title and pointer stay out: the code names the error and the detail explains it. */
     record ErrorResponse(String code, String detail) {}
 
-    record TaxesResponse(@JsonProperty("IBSCBS") IbsCbsResponse ibsCbs) {}
+    record TotalResponse(TotalTaxesResponse tribCalc) {}
 
-    record IbsCbsResponse(AmountsResponse gIBSCBS) {}
+    record TotalTaxesResponse(@JsonProperty("IBSCBSTot") TotalAmountsResponse ibsCbs) {}
 
-    record AmountsResponse(BigDecimal vBC, BigDecimal vIBS, CbsResponse gCBS) {}
+    record TotalAmountsResponse(BigDecimal vBCIBSCBS, CbsResponse gCBS, IbsResponse gIBS) {}
 
     record CbsResponse(BigDecimal vCBS) {}
+
+    record IbsResponse(BigDecimal vIBS) {}
 }
