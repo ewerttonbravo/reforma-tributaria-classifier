@@ -8,9 +8,11 @@ import com.ebravo.taxclassifier.application.AiFailure.Kind;
 import com.ebravo.taxclassifier.application.OfficialCandidates;
 import com.ebravo.taxclassifier.application.OfficialLegalBasis;
 import com.ebravo.taxclassifier.application.ProductPublisher;
+import com.ebravo.taxclassifier.application.TaxCalculator;
 import com.ebravo.taxclassifier.domain.LegalBasis;
 import com.ebravo.taxclassifier.domain.Product;
 import com.ebravo.taxclassifier.domain.Suggestion;
+import com.ebravo.taxclassifier.domain.TaxCalculation.Calculated;
 import com.ebravo.taxclassifier.domain.TaxClassification;
 import com.ebravo.taxclassifier.domain.TaxSituation;
 import java.math.BigDecimal;
@@ -86,7 +88,8 @@ class ClassificationListenerTest {
                 """
                 {"product":{"code":"P001","description":"Arroz tipo 1 5kg","ncm":"10063021","price":"25.90"},
                  "suggestion":{"cst":"200","cClassTrib":"200003","confidence":"0.95","justification":"Arroz integra a cesta básica."},
-                 "legalBasis":{"shortText":"Art. 125","text":"Art. 125. Ficam reduzidas a zero","normativeReference":"LC 214/2025"}}""",
+                 "legalBasis":{"shortText":"Art. 125","text":"Art. 125. Ficam reduzidas a zero","normativeReference":"LC 214/2025"},
+                 "calculation":{"base":"25.90","cbs":"0.23","ibs":"0.03","simulated":false}}""",
                 recordWithKey("produtos-classificados", "P001").value(), JSONCompareMode.STRICT);
     }
 
@@ -98,7 +101,8 @@ class ClassificationListenerTest {
                 """
                 {"product":{"code":"P005","description":"Unidade imobiliária","ncm":"10063021","price":"1000.00"},
                  "suggestion":{"cst":"220","cClassTrib":"220001","confidence":"0.95","justification":"Incorporação imobiliária em regime especial."},
-                 "legalBasis":null}""",
+                 "legalBasis":null,
+                 "calculation":{"base":"1000.00","cbs":"0.23","ibs":"0.03","simulated":false}}""",
                 recordWithKey("produtos-classificados", "P005").value(), JSONCompareMode.STRICT);
     }
 
@@ -185,6 +189,14 @@ class ClassificationListenerTest {
                 }
                 return answer;
             };
+        }
+
+        /** The amounts of the recorded calculation of P001 in 2026, on each product's price as the base. */
+        @Bean
+        @Primary
+        TaxCalculator fakeCalculator() {
+            return (product, suggestion, taxableEvent) ->
+                    new Calculated(product.price(), new BigDecimal("0.23"), new BigDecimal("0.03"), false);
         }
 
         @Bean

@@ -9,6 +9,8 @@ import com.ebravo.taxclassifier.domain.Product;
 import com.ebravo.taxclassifier.domain.ReviewReason;
 import com.ebravo.taxclassifier.domain.Suggestion;
 import com.ebravo.taxclassifier.domain.SuggestionCheck;
+import com.ebravo.taxclassifier.domain.TaxCalculation;
+import com.ebravo.taxclassifier.domain.TaxCalculation.Calculated;
 import com.ebravo.taxclassifier.domain.TaxClassification;
 import com.ebravo.taxclassifier.domain.TaxSituation;
 import java.math.BigDecimal;
@@ -36,18 +38,24 @@ class ClassifyProductTest {
     private static final LegalBasis BASIS_OF_200003 = new LegalBasis("Art. 125", "Art. 125. Ficam reduzidas a zero", "LC 214/2025");
 
     private final List<LocalDate> officialListDates = new ArrayList<>();
+    private final List<String> calculations = new ArrayList<>();
     private final List<String> legalBasisRequests = new ArrayList<>();
     private final List<Object> advised = new ArrayList<>();
     private Suggestion answer;
+    private TaxCalculation calculation = new Calculated(new BigDecimal("25.90"), new BigDecimal("0.23"), new BigDecimal("0.03"), false);
 
-    @Test
-    void acceptedSuggestionIsClassifiedWithItsOfficialLegalBasis() {
+    @ParameterizedTest
+    @CsvSource({"false", "true"})
+    void calculatedSuggestionIsClassifiedWithItsAmountsAndLegalBasis(boolean simulated) {
         answer = new Suggestion("200", "200003", new BigDecimal("0.95"), "Arroz integra a cesta básica.");
+        var amounts = new Calculated(new BigDecimal("25.90"), new BigDecimal("2.28"), new BigDecimal("0.03"), simulated);
+        calculation = amounts;
 
         var classification = classifyAt(NOON_IN_SAO_PAULO).classify(PRODUCT);
 
-        assertThat(classification).isEqualTo(new Classified(answer, Optional.of(BASIS_OF_200003)));
+        assertThat(classification).isEqualTo(new Classified(answer, Optional.of(BASIS_OF_200003), amounts));
         assertThat(advised).containsExactly(PRODUCT, OFFICIAL);
+        assertThat(calculations).containsExactly("P001 under 200/200003 at " + NOON_IN_SAO_PAULO);
     }
 
     @Test
@@ -56,7 +64,7 @@ class ClassifyProductTest {
 
         var classification = classifyAt(NOON_IN_SAO_PAULO).classify(PRODUCT);
 
-        assertThat(classification).isEqualTo(new Classified(answer, Optional.empty()));
+        assertThat(classification).isEqualTo(new Classified(answer, Optional.empty(), calculation));
         assertThat(legalBasisRequests).containsExactly("220001 on " + TODAY);
     }
 
@@ -71,6 +79,7 @@ class ClassifyProductTest {
         var classification = classifyAt(NOON_IN_SAO_PAULO).classify(PRODUCT);
 
         assertThat(classification).isEqualTo(new ToReview(answer, reason));
+        assertThat(calculations).isEmpty();
         assertThat(legalBasisRequests).isEmpty();
     }
 
@@ -99,6 +108,10 @@ class ClassifyProductTest {
                     return answer;
                 },
                 new SuggestionCheck(new BigDecimal("0.80")),
+                (product, suggestion, taxableEvent) -> {
+                    calculations.add(product.code() + " under " + suggestion.cst() + "/" + suggestion.cClassTrib() + " at " + taxableEvent);
+                    return calculation;
+                },
                 (cClassTrib, date) -> {
                     legalBasisRequests.add(cClassTrib + " on " + date);
                     // Any other code or date has no basis, so asking for the wrong one fails the test.
