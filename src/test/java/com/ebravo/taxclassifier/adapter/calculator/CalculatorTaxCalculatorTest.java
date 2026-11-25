@@ -9,15 +9,25 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
 import com.ebravo.taxclassifier.application.TaxCalculator;
+import com.ebravo.taxclassifier.domain.CalculationError;
 import com.ebravo.taxclassifier.domain.Product;
 import com.ebravo.taxclassifier.domain.Suggestion;
+import com.ebravo.taxclassifier.domain.TaxCalculation;
 import com.ebravo.taxclassifier.domain.TaxCalculation.Calculated;
+import com.ebravo.taxclassifier.domain.TaxCalculation.InputInconsistency;
+import com.ebravo.taxclassifier.domain.TaxCalculation.NotImplemented;
+import com.ebravo.taxclassifier.domain.TaxCalculation.TechnicalFailure;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.List;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.restclient.test.autoconfigure.RestClientTest;
 import org.springframework.core.io.ClassPathResource;
@@ -63,6 +73,29 @@ class CalculatorTaxCalculatorTest {
         server.verify();
         assertThat(calculation).isEqualTo(
                 new Calculated(new BigDecimal("25.90"), new BigDecimal("0.23"), new BigDecimal("0.03"), false));
+    }
+
+    @ParameterizedTest
+    @MethodSource("uncalculatedItems")
+    void uncalculatedItemCarriesTheCalculatorErrors(String response, TaxCalculation expected) {
+        server.expect(requestTo(REGIME_GERAL)).andRespond(withSuccess(response, APPLICATION_JSON));
+
+        assertThat(calculator.calculate(RICE, FULL_TAXATION, LATE_EVENING)).isEqualTo(expected);
+    }
+
+    /**
+     * REG-011 and CAL-007 were recorded (cClassTrib 200035 and 620001). No valid input made release 1.6.1 answer
+     * FALHA_TECNICA, so that response is written in the shape of the recorded CAL-007, with the title of CAL-999 in its catalog.
+     */
+    static Stream<Arguments> uncalculatedItems() {
+        return Stream.of(
+                Arguments.of(recorded("regime-geral-p001-2026-reg011.json"), new InputInconsistency(List.of(new CalculationError(
+                        "REG-011", "NCM de código 10063021 não vinculada à Classificação Tributária de código 200035 (CBS e IBS)")))),
+                Arguments.of(recorded("regime-geral-p001-2026-nao-implementado.json"), new NotImplemented(List.of(new CalculationError(
+                        "CAL-007", "A classificação tributária 620001 ainda não possui tratamento tributário implementado na Calculadora. Essa funcionalidade está prevista no roadmap e será disponibilizada em versão futura.")))),
+                Arguments.of("""
+                        {"objetos":[{"nObj":1,"estadoItem":"FALHA_TECNICA","erros":[{"code":"CAL-999","detail":"Erro interno do sistema"}]}]}
+                        """, new TechnicalFailure(List.of(new CalculationError("CAL-999", "Erro interno do sistema")))));
     }
 
     private static String recorded(String name) {
