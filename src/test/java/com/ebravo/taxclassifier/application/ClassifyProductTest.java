@@ -1,6 +1,7 @@
 package com.ebravo.taxclassifier.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.ebravo.taxclassifier.domain.CalculationError;
 import com.ebravo.taxclassifier.domain.Classification.Classified;
@@ -14,6 +15,7 @@ import com.ebravo.taxclassifier.domain.TaxCalculation;
 import com.ebravo.taxclassifier.domain.TaxCalculation.Calculated;
 import com.ebravo.taxclassifier.domain.TaxCalculation.InputInconsistency;
 import com.ebravo.taxclassifier.domain.TaxCalculation.NotImplemented;
+import com.ebravo.taxclassifier.domain.TaxCalculation.TechnicalFailure;
 import com.ebravo.taxclassifier.domain.TaxClassification;
 import com.ebravo.taxclassifier.domain.TaxSituation;
 import java.math.BigDecimal;
@@ -110,6 +112,18 @@ class ClassifyProductTest {
         return Stream.of(
                 Arguments.of(new InputInconsistency(notLinked), notLinked, ReviewReason.INPUT_INCONSISTENCY),
                 Arguments.of(new NotImplemented(notImplemented), notImplemented, ReviewReason.NOT_IMPLEMENTED));
+    }
+
+    @Test
+    void technicalFailureIsAFailureNotAReview() {
+        answer = new Suggestion("200", "200003", new BigDecimal("0.95"), "Arroz integra a cesta básica.");
+        calculation = new TechnicalFailure(List.of(
+                new CalculationError("CAL-001", "Alíquota não encontrada"), new CalculationError("CAL-999", "Erro interno do sistema")));
+
+        assertThatThrownBy(() -> classifyAt(NOON_IN_SAO_PAULO).classify(PRODUCT))
+                .isInstanceOf(CalculationFailed.class)
+                .hasMessage("the calculator failed on the item: CAL-001 Alíquota não encontrada; CAL-999 Erro interno do sistema");
+        assertThat(legalBasisRequests).isEmpty();
     }
 
     @ParameterizedTest
