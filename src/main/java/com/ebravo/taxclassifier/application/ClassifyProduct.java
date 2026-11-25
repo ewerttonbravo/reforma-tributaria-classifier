@@ -5,12 +5,16 @@ import com.ebravo.taxclassifier.domain.Classification.Classified;
 import com.ebravo.taxclassifier.domain.Classification.ToReview;
 import com.ebravo.taxclassifier.domain.Product;
 import com.ebravo.taxclassifier.domain.SuggestionCheck;
+import com.ebravo.taxclassifier.domain.ReviewReason;
 import com.ebravo.taxclassifier.domain.TaxCalculation.Calculated;
+import com.ebravo.taxclassifier.domain.TaxCalculation.InputInconsistency;
+import com.ebravo.taxclassifier.domain.TaxCalculation.NotImplemented;
 import com.ebravo.taxclassifier.domain.Verdict.Accepted;
 import com.ebravo.taxclassifier.domain.Verdict.NeedsReview;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.List;
 
 /** Asks the AI to classify a product from the official list of the day, checks its answer and calculates CBS and IBS under it. */
 public final class ClassifyProduct {
@@ -44,9 +48,11 @@ public final class ClassifyProduct {
         return switch (check.check(advisor.suggest(product, official), official)) {
             case Accepted(var suggestion) -> switch (calculator.calculate(product, suggestion, now)) {
                 case Calculated calculation -> new Classified(suggestion, legalBasis.of(suggestion.cClassTrib(), today), calculation);
+                case InputInconsistency(var errors) -> new ToReview(suggestion, ReviewReason.INPUT_INCONSISTENCY, errors);
+                case NotImplemented(var errors) -> new ToReview(suggestion, ReviewReason.NOT_IMPLEMENTED, errors);
                 default -> throw new UnsupportedOperationException("routed in the next cycle");
             };
-            case NeedsReview(var suggestion, var reason) -> new ToReview(suggestion, reason);
+            case NeedsReview(var suggestion, var reason) -> new ToReview(suggestion, reason, List.of());
         };
     }
 }

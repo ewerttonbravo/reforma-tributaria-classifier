@@ -1,6 +1,7 @@
 package com.ebravo.taxclassifier.domain;
 
 import com.ebravo.taxclassifier.domain.TaxCalculation.Calculated;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -18,10 +19,12 @@ public sealed interface Classification {
         }
     }
 
-    record ToReview(Suggestion suggestion, ReviewReason reason) implements Classification {
+    /** The errors are the calculator's, empty when the suggestion was sent to review before it was calculated. */
+    record ToReview(Suggestion suggestion, ReviewReason reason, List<CalculationError> errors) implements Classification {
 
         public ToReview {
             Objects.requireNonNull(reason, "reason");
+            errors = List.copyOf(errors);
         }
     }
 }

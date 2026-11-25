@@ -2,6 +2,7 @@ package com.ebravo.taxclassifier.adapter.kafka;
 
 import com.ebravo.taxclassifier.adapter.cli.PublishCommand;
 import com.ebravo.taxclassifier.application.ClassifyProduct;
+import com.ebravo.taxclassifier.domain.CalculationError;
 import com.ebravo.taxclassifier.domain.Classification.Classified;
 import com.ebravo.taxclassifier.domain.Classification.ToReview;
 import com.ebravo.taxclassifier.domain.LegalBasis;
@@ -9,6 +10,7 @@ import com.ebravo.taxclassifier.domain.Product;
 import com.ebravo.taxclassifier.domain.ReviewReason;
 import com.ebravo.taxclassifier.domain.Suggestion;
 import com.ebravo.taxclassifier.domain.TaxCalculation.Calculated;
+import java.util.List;
 import org.springframework.context.annotation.Profile;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.core.KafkaTemplate;
@@ -36,8 +38,8 @@ class ClassificationListener {
             case Classified(var suggestion, var legalBasis, var calculation) -> send(CLASSIFIED_TOPIC, product,
                     new ClassifiedMessage(message, SuggestionMessage.of(suggestion), legalBasis.orElse(null),
                             CalculationMessage.of(calculation)));
-            case ToReview(var suggestion, var reason) -> send(REVIEW_TOPIC, product,
-                    new ReviewMessage(message, SuggestionMessage.of(suggestion), reason));
+            case ToReview(var suggestion, var reason, var errors) -> send(REVIEW_TOPIC, product,
+                    new ReviewMessage(message, SuggestionMessage.of(suggestion), reason, errors));
         }
     }
 
@@ -66,5 +68,6 @@ class ClassificationListener {
     record ClassifiedMessage(
             ProductMessage product, SuggestionMessage suggestion, LegalBasis legalBasis, CalculationMessage calculation) {}
 
-    record ReviewMessage(ProductMessage product, SuggestionMessage suggestion, ReviewReason reason) {}
+    record ReviewMessage(
+            ProductMessage product, SuggestionMessage suggestion, ReviewReason reason, List<CalculationError> errors) {}
 }
