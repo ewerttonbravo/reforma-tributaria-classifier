@@ -22,7 +22,7 @@ The service commits a product's offset only after its result is sent (D20). A pr
    done
    ```
    The sum of `CURRENT-OFFSET` over the partitions of `produtos` is the number of products committed; the offsets of the two output topics add up to the results published. Committed is never above published: no product was committed without its result. This holds only if the service logged no failed classification, since until task 13 a failure is skipped and its offset committed with no result (trade-off "Failed classification"). `LAG` above 0 shows products still to classify, read or not.
-5. Start the service again. The broker keeps the dead consumer in the group until its session times out (`session.timeout.ms`), so the new one may sit idle before it gets the partitions. Once it is done, `LAG` is 0 on every partition and every product of the sample is on `produtos-classificados` or `produtos-revisao` (see the README).
+5. Start the service again. The broker keeps the dead consumer in the group until its session times out (`session.timeout.ms`), so the new one may sit idle before it gets the partitions. Compare only once it is done or stopped: the commands of step 4 run seconds apart, so while the service consumes they read different moments. Once it is done, `LAG` is 0 on every partition and every product of the sample is on `produtos-classificados` or `produtos-revisao` (see the README).
 
 ### Break it
 Turn on the client's auto-commit and run the crash test, which throws an `Error` before publishing, as a fatal error such as `OutOfMemoryError` would:
