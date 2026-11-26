@@ -23,6 +23,9 @@ spring:
         spring.deserializer.value.delegate.class: org.springframework.kafka.support.serializer.JacksonJsonDeserializer
         spring.json.value.default.type: com.ebravo.taxclassifier.adapter.kafka.ProductMessage
         spring.json.use.type.headers: false
+    listener:
+      # Commits each record once the listener returns, after its result is sent; a crash reprocesses only that record.
+      ack-mode: record
 calculator:
   base-url: http://localhost:8080/api/calculadora
   # Where the operation takes place (IBGE code); the products CSV has no location.
