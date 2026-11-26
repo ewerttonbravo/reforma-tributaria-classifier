@@ -181,16 +181,20 @@ class ClassificationListenerTest {
         kafka.send(KafkaProductPublisher.TOPIC, 2, "P009", new ProductMessage("P009", "Arroz agulhinha 1kg", "10063021", "7.20"))
                 .join();
 
-        await().atMost(Duration.ofSeconds(30))
-                .until(() -> registry.getListenerContainers().stream().noneMatch(MessageListenerContainer::isRunning));
-        registry.start();
+        try {
+            await().atMost(Duration.ofSeconds(30))
+                    .until(() -> registry.getListenerContainers().stream().noneMatch(MessageListenerContainer::isRunning));
+        } finally {
+            // The other tests share the container; a stop that times out here must not fail them too.
+            registry.start();
+        }
 
         assertThat(recordWithKey("produtos-classificados", "P009")).isNotNull();
         assertThat(ADVISED).filteredOn("P009"::equals).hasSize(2);
     }
 
     @Test
-    void offsetIsCommittedOnceTheResultIsPublished() throws Exception {
+    void offsetMovesPastAPublishedProduct() throws Exception {
         var sent = kafka.send(KafkaProductPublisher.TOPIC, 0, "P010", new ProductMessage("P010", "Arroz arbóreo 1kg", "10063021", "12.40"))
                 .join();
         var partition = new TopicPartition(KafkaProductPublisher.TOPIC, 0);
