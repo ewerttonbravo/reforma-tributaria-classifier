@@ -42,8 +42,10 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
+import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
 import org.springframework.kafka.core.ConsumerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.kafka.listener.ContainerProperties.AckMode;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.kafka.KafkaContainer;
@@ -86,6 +88,9 @@ class ClassificationListenerTest {
 
     @Autowired
     ConsumerFactory<?, ?> consumerFactory;
+
+    @Autowired
+    KafkaListenerEndpointRegistry registry;
 
     @Test
     void acceptedProductIsPublishedAsClassifiedWithItsLegalBasis() throws Exception {
@@ -166,6 +171,15 @@ class ClassificationListenerTest {
     void consumerPollsOneProductAtATime() {
         // Each product waits on the AI; a poll of 500 could outlast max.poll.interval.ms and be classified again.
         assertThat(consumerFactory.getConfigurationProperties()).containsEntry(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 1);
+    }
+
+    @Test
+    void listenerCommitsEachProductOnItsOwn() {
+        // A crash then reprocesses only the product in flight, whatever the poll size.
+        assertThat(registry.getListenerContainers())
+                .singleElement()
+                .extracting(container -> container.getContainerProperties().getAckMode())
+                .isEqualTo(AckMode.RECORD);
     }
 
     /** Reads the topic from the beginning until a record with the key shows up. */
