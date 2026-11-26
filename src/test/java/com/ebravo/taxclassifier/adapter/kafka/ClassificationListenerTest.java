@@ -26,6 +26,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
+import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
@@ -77,7 +79,8 @@ class ClassificationListenerTest {
             "P005", new Suggestion("220", "220001", new BigDecimal("0.95"), "Incorporação imobiliária em regime especial."),
             "P007", new Suggestion("200", "200003", new BigDecimal("0.95"), "Arroz integra a cesta básica."),
             "P008", new Suggestion("200", "200035", new BigDecimal("0.95"), "Arroz parece ter alíquota reduzida."),
-            "P009", new Suggestion("200", "200003", new BigDecimal("0.95"), "Arroz integra a cesta básica."));
+            "P009", new Suggestion("200", "200003", new BigDecimal("0.95"), "Arroz integra a cesta básica."),
+            "P010", new Suggestion("200", "200003", new BigDecimal("0.95"), "Arroz integra a cesta básica."));
     /** REG-011 as release 1.6.1 answered it for P001 under 200035. */
     private static final CalculationError NOT_LINKED = new CalculationError("REG-011",
             "NCM de código 10063021 não vinculada à Classificação Tributária de código 200035 (CBS e IBS)");
@@ -184,6 +187,21 @@ class ClassificationListenerTest {
 
         assertThat(recordWithKey("produtos-classificados", "P009")).isNotNull();
         assertThat(ADVISED).filteredOn("P009"::equals).hasSize(2);
+    }
+
+    @Test
+    void offsetIsCommittedOnceTheResultIsPublished() throws Exception {
+        var sent = kafka.send(KafkaProductPublisher.TOPIC, 0, "P010", new ProductMessage("P010", "Arroz arbóreo 1kg", "10063021", "12.40"))
+                .join();
+        var partition = new TopicPartition(KafkaProductPublisher.TOPIC, 0);
+
+        assertThat(recordWithKey("produtos-classificados", "P010")).isNotNull();
+        try (var admin = Admin.create(Map.of(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, KAFKA.getBootstrapServers()))) {
+            await().atMost(Duration.ofSeconds(30)).until(() -> {
+                var committed = admin.listConsumerGroupOffsets("tax-classifier").partitionsToOffsetAndMetadata().get().get(partition);
+                return committed != null && committed.offset() == sent.getRecordMetadata().offset() + 1;
+            });
+        }
     }
 
     @Test
