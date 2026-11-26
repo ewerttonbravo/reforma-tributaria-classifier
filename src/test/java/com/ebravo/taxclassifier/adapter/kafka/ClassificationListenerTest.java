@@ -1,6 +1,7 @@
 package com.ebravo.taxclassifier.adapter.kafka;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 
 import com.ebravo.taxclassifier.application.AiAdvisor;
 import com.ebravo.taxclassifier.application.AiFailure;
@@ -24,6 +25,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
@@ -46,6 +48,7 @@ import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
 import org.springframework.kafka.core.ConsumerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.listener.ContainerProperties.AckMode;
+import org.springframework.kafka.listener.MessageListenerContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.kafka.KafkaContainer;
@@ -73,12 +76,15 @@ class ClassificationListenerTest {
             "P004", new Suggestion("200", "200003", new BigDecimal("0.95"), "Arroz integra a cesta básica."),
             "P005", new Suggestion("220", "220001", new BigDecimal("0.95"), "Incorporação imobiliária em regime especial."),
             "P007", new Suggestion("200", "200003", new BigDecimal("0.95"), "Arroz integra a cesta básica."),
-            "P008", new Suggestion("200", "200035", new BigDecimal("0.95"), "Arroz parece ter alíquota reduzida."));
+            "P008", new Suggestion("200", "200035", new BigDecimal("0.95"), "Arroz parece ter alíquota reduzida."),
+            "P009", new Suggestion("200", "200003", new BigDecimal("0.95"), "Arroz integra a cesta básica."));
     /** REG-011 as release 1.6.1 answered it for P001 under 200035. */
     private static final CalculationError NOT_LINKED = new CalculationError("REG-011",
             "NCM de código 10063021 não vinculada à Classificação Tributária de código 200035 (CBS e IBS)");
     /** The codes the fake AI was asked about; a code without an answer makes it fail. */
     private static final List<String> ADVISED = new CopyOnWriteArrayList<>();
+    /** Whether the service already died once while calculating P009, after the AI answered and before publishing. */
+    private static final AtomicBoolean DIED = new AtomicBoolean();
 
     @Autowired
     ProductPublisher publisher;
@@ -168,6 +174,19 @@ class ClassificationListenerTest {
     }
 
     @Test
+    void productIsClassifiedAgainWhenTheServiceDiesBeforePublishing() {
+        kafka.send(KafkaProductPublisher.TOPIC, 2, "P009", new ProductMessage("P009", "Arroz agulhinha 1kg", "10063021", "7.20"))
+                .join();
+
+        await().atMost(Duration.ofSeconds(30))
+                .until(() -> registry.getListenerContainers().stream().noneMatch(MessageListenerContainer::isRunning));
+        registry.start();
+
+        assertThat(recordWithKey("produtos-classificados", "P009")).isNotNull();
+        assertThat(ADVISED).filteredOn("P009"::equals).hasSize(2);
+    }
+
+    @Test
     void consumerPollsOneProductAtATime() {
         // Each product waits on the AI; a poll of 500 could outlast max.poll.interval.ms and be classified again.
         assertThat(consumerFactory.getConfigurationProperties()).containsEntry(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 1);
@@ -203,6 +222,9 @@ class ClassificationListenerTest {
         }
     }
 
+    /** An {@link Error} stops the consumer without committing, as the process dying would. */
+    static final class ServiceDied extends Error {}
+
     @TestConfiguration
     static class Fakes {
 
@@ -226,15 +248,20 @@ class ClassificationListenerTest {
         }
 
         /**
-         * REG-011 for 200035; otherwise the amounts of the recorded calculation of P001 in 2026, on each product's price as the
+         * Dies the first time it calculates P009; REG-011 for 200035; otherwise the amounts of the recorded calculation of P001 in 2026, on each product's price as the
          * base, simulated for P005 only, so the flag is proven to reach the topic both ways.
          */
         @Bean
         @Primary
         TaxCalculator fakeCalculator() {
-            return (product, suggestion, taxableEvent) -> suggestion.cClassTrib().equals("200035")
-                    ? new InputInconsistency(List.of(NOT_LINKED))
-                    : new Calculated(product.price(), new BigDecimal("0.23"), new BigDecimal("0.03"), product.code().equals("P005"));
+            return (product, suggestion, taxableEvent) -> {
+                if (product.code().equals("P009") && DIED.compareAndSet(false, true)) {
+                    throw new ServiceDied();
+                }
+                return suggestion.cClassTrib().equals("200035")
+                        ? new InputInconsistency(List.of(NOT_LINKED))
+                        : new Calculated(product.price(), new BigDecimal("0.23"), new BigDecimal("0.03"), product.code().equals("P005"));
+            };
         }
 
         @Bean
