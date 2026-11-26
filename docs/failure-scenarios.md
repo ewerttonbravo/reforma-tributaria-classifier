@@ -9,6 +9,7 @@ Every section assumes Kafka running (`docker compose up -d`), the official calcu
 The service commits a product's offset only after its result is sent (D20). A product in flight when the service dies is classified again when it comes back.
 
 ### Reproduce
+0. Start from an empty broker, so the topics and the group's offsets hold this run only: `docker compose down && docker compose up -d` (the broker has no volume, so this deletes every topic).
 1. Start the service with a Claude API key and no other arguments: `java -jar target/tax-classifier.jar`.
 2. In another terminal, publish the sample: `java -jar target/tax-classifier.jar publish samples/products.csv`.
 3. A few seconds later, before the 11 products are done (each one waits on the AI), kill the service without a shutdown: `kill -9 $(pgrep -f 'tax-classifier.jar$')`.
@@ -20,7 +21,7 @@ The service commits a product's offset only after its result is sent (D20). A pr
      docker compose exec kafka /opt/kafka/bin/kafka-get-offsets.sh --bootstrap-server localhost:9092 --topic $topic
    done
    ```
-   The sum of `CURRENT-OFFSET` over the partitions of `produtos` is the number of products committed; the offsets of the two output topics add up to the results published. Committed is never above published: no product was committed without its result. `LAG` above 0 shows products still to classify, read or not.
+   The sum of `CURRENT-OFFSET` over the partitions of `produtos` is the number of products committed; the offsets of the two output topics add up to the results published. Committed is never above published: no product was committed without its result. This holds only if the service logged no failed classification, since until task 13 a failure is skipped and its offset committed with no result (trade-off "Failed classification"). `LAG` above 0 shows products still to classify, read or not.
 5. Start the service again. The broker keeps the dead consumer in the group until its session times out (`session.timeout.ms`), so the new one may sit idle before it gets the partitions. Once it is done, `LAG` is 0 on every partition and every product of the sample is on `produtos-classificados` or `produtos-revisao` (see the README).
 
 ### Break it
