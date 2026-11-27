@@ -24,7 +24,9 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
@@ -51,6 +53,7 @@ class ClassifyProductTest {
     private final List<String> calculations = new ArrayList<>();
     private final List<String> legalBasisRequests = new ArrayList<>();
     private final List<Object> advised = new ArrayList<>();
+    private final Map<Product, Suggestion> saved = new HashMap<>();
     private Suggestion answer;
     private TaxCalculation calculation = CALCULATED;
 
@@ -140,6 +143,34 @@ class ClassifyProductTest {
         assertThat(legalBasisRequests).containsExactly("200003 on " + today);
     }
 
+    @Test
+    void savedSuggestionIsUsedWithoutAskingTheAi() {
+        var stored = new Suggestion("200", "200003", new BigDecimal("0.95"), "Arroz integra a cesta básica.");
+        saved.put(PRODUCT, stored);
+
+        var classification = classifyAt(NOON_IN_SAO_PAULO).classify(PRODUCT);
+
+        assertThat(classification).isEqualTo(new Classified(stored, Optional.of(BASIS_OF_200003), CALCULATED));
+        assertThat(advised).isEmpty();
+    }
+
+    @Test
+    void newSuggestionIsSavedEvenWhenItGoesToReview() {
+        answer = new Suggestion("200", "200003", new BigDecimal("0.79"), "Arroz integra a cesta básica.");
+
+        classifyAt(NOON_IN_SAO_PAULO).classify(PRODUCT);
+
+        assertThat(saved).containsExactly(Map.entry(PRODUCT, answer));
+    }
+
+    @Test
+    void failedAiCallSavesNothing() {
+        answer = null;
+
+        assertThatThrownBy(() -> classifyAt(NOON_IN_SAO_PAULO).classify(PRODUCT)).isInstanceOf(AiFailure.class);
+        assertThat(saved).isEmpty();
+    }
+
     private ClassifyProduct classifyAt(Instant now) {
         return new ClassifyProduct(
                 date -> {
@@ -148,7 +179,21 @@ class ClassifyProductTest {
                 },
                 (product, official) -> {
                     advised.addAll(List.of(product, official));
+                    if (answer == null) {
+                        throw new AiFailure(AiFailure.Kind.REFUSED, "the AI refused", null);
+                    }
                     return answer;
+                },
+                new SuggestionStore() {
+                    @Override
+                    public Optional<Suggestion> find(Product product) {
+                        return Optional.ofNullable(saved.get(product));
+                    }
+
+                    @Override
+                    public void save(Product product, Suggestion suggestion) {
+                        saved.putIfAbsent(product, suggestion);
+                    }
                 },
                 new SuggestionCheck(new BigDecimal("0.80")),
                 (product, suggestion, taxableEvent) -> {

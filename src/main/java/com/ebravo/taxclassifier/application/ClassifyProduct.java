@@ -27,16 +27,18 @@ public final class ClassifyProduct {
 
     private final OfficialCandidates candidates;
     private final AiAdvisor advisor;
+    private final SuggestionStore suggestions;
     private final SuggestionCheck check;
     private final TaxCalculator calculator;
     private final OfficialLegalBasis legalBasis;
     private final Clock clock;
 
     public ClassifyProduct(
-            OfficialCandidates candidates, AiAdvisor advisor, SuggestionCheck check, TaxCalculator calculator,
-            OfficialLegalBasis legalBasis, Clock clock) {
+            OfficialCandidates candidates, AiAdvisor advisor, SuggestionStore suggestions, SuggestionCheck check,
+            TaxCalculator calculator, OfficialLegalBasis legalBasis, Clock clock) {
         this.candidates = candidates;
         this.advisor = advisor;
+        this.suggestions = suggestions;
         this.check = check;
         this.calculator = calculator;
         this.legalBasis = legalBasis;
