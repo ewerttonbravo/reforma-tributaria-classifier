@@ -7,6 +7,7 @@ import com.ebravo.taxclassifier.domain.Product;
 import com.ebravo.taxclassifier.domain.ReviewReason;
 import com.ebravo.taxclassifier.domain.Suggestion;
 import com.ebravo.taxclassifier.domain.SuggestionCheck;
+import com.ebravo.taxclassifier.domain.TaxSituation;
 import com.ebravo.taxclassifier.domain.TaxCalculation.Calculated;
 import com.ebravo.taxclassifier.domain.TaxCalculation.InputInconsistency;
 import com.ebravo.taxclassifier.domain.TaxCalculation.NotImplemented;
@@ -19,7 +20,10 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.List;
 
-/** Asks the AI to classify a product from the official list of the day, checks its answer and calculates CBS and IBS under it. */
+/**
+ * Asks the AI to classify a product from the official list of the day, unless a suggestion is saved for it, checks the suggestion
+ * and calculates CBS and IBS under it.
+ */
 public final class ClassifyProduct {
 
     // The official tables are read for the calendar day in Brazil, whatever zone the clock runs in.
@@ -50,10 +54,18 @@ public final class ClassifyProduct {
         var now = clock.instant();
         var today = LocalDate.ofInstant(now, SAO_PAULO);
         var official = candidates.on(today);
-        return switch (check.check(advisor.suggest(product, official), official)) {
+        var answer = suggestions.find(product).orElseGet(() -> ask(product, official));
+        return switch (check.check(answer, official)) {
             case Accepted(var suggestion) -> calculate(product, suggestion, now, today);
             case NeedsReview(var suggestion, var reason) -> new ToReview(suggestion, reason, List.of());
         };
+    }
+
+    /** Saved as soon as the AI answers, so a product read again after a crash is not paid for twice. */
+    private Suggestion ask(Product product, List<TaxSituation> official) {
+        var suggestion = advisor.suggest(product, official);
+        suggestions.save(product, suggestion);
+        return suggestion;
     }
 
     /** Only a calculated suggestion stands, so only it needs its legal basis. */
