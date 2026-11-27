@@ -69,8 +69,9 @@ class JdbcSuggestionStoreTest {
     void secondSaveKeepsTheFirstSuggestion() {
         store.save(RICE, SUGGESTION);
 
-        store.save(RICE, new Suggestion("220", "220001", new BigDecimal("0.95"), "Outra resposta."));
+        var kept = store.save(RICE, new Suggestion("220", "220001", new BigDecimal("0.95"), "Outra resposta."));
 
+        assertThat(kept).isEqualTo(SUGGESTION);
         assertThat(store.find(RICE)).contains(SUGGESTION);
     }
 }

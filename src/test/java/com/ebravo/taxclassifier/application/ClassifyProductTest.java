@@ -55,6 +55,7 @@ class ClassifyProductTest {
     private final List<Object> advised = new ArrayList<>();
     private final Map<Product, Suggestion> saved = new HashMap<>();
     private Suggestion answer;
+    private Suggestion savedByAnotherInstance;
     private TaxCalculation calculation = CALCULATED;
 
     @ParameterizedTest
@@ -164,6 +165,18 @@ class ClassifyProductTest {
     }
 
     @Test
+    void suggestionSavedFirstByAnotherInstanceIsTheOneUsed() {
+        // Both instances missed the store and asked the AI, which answered each one differently.
+        answer = new Suggestion("220", "220001", new BigDecimal("0.95"), "Resposta da segunda instância.");
+        savedByAnotherInstance = new Suggestion("200", "200003", new BigDecimal("0.95"), "Arroz integra a cesta básica.");
+
+        var classification = classifyAt(NOON_IN_SAO_PAULO).classify(PRODUCT);
+
+        assertThat(classification)
+                .isEqualTo(new Classified(savedByAnotherInstance, Optional.of(BASIS_OF_200003), CALCULATED));
+    }
+
+    @Test
     void failedAiCallSavesNothing() {
         answer = null;
 
@@ -191,8 +204,12 @@ class ClassifyProductTest {
                     }
 
                     @Override
-                    public void save(Product product, Suggestion suggestion) {
-                        saved.putIfAbsent(product, suggestion);
+                    public Suggestion save(Product product, Suggestion suggestion) {
+                        if (savedByAnotherInstance != null) {
+                            saved.putIfAbsent(product, savedByAnotherInstance);
+                        }
+                        var kept = saved.putIfAbsent(product, suggestion);
+                        return kept == null ? suggestion : kept;
                     }
                 },
                 new SuggestionCheck(new BigDecimal("0.80")),
