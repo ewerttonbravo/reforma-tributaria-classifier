@@ -2,7 +2,7 @@
 
 How to reproduce each failure scenario by hand, and how to break the protection that handles it. This document grows with tasks 10 to 15 of the [roadmap](roadmap.md).
 
-Every section assumes Kafka running (`docker compose up -d`), the official calculator on `:8080` and the service built (`./mvnw -DskipTests package`), as in the [README](../README.md).
+Every section assumes Kafka and PostgreSQL running (`docker compose up -d`), the official calculator on `:8080` and the service built (`./mvnw -DskipTests package`), as in the [README](../README.md).
 
 ## Crash before publishing (task 10)
 
@@ -35,4 +35,32 @@ Turn on the client's auto-commit and run the crash test, which throws an `Error`
 It fails with `no record with key P009 in produtos-classificados`: the consumer that stopped committed its position on close, past the product it never published, so the product is lost. Without the flag the test passes.
 
 ### What it does not cover
-A death between the send and the commit publishes the result twice and pays for the AI twice (trade-off "At-least-once").
+A death between the send and the commit publishes the result twice (trade-off "At-least-once"); the AI is still paid once, as the next section shows.
+
+## Duplicate message (task 11b)
+
+The service saves the AI's suggestion per product code, description and NCM as soon as the AI answers (D21, D22). A product read again is checked against the official list of the day, calculated on its own price and published again, without a new call to the AI.
+
+### Reproduce
+0. Start from an empty broker and database: `docker compose down && docker compose up -d` (neither has a volume).
+1. Start the service with a Claude API key: `java -jar target/tax-classifier.jar`.
+2. Publish the sample: `java -jar target/tax-classifier.jar publish samples/products.csv`. Its 11 lines hold 10 products: P001 comes twice, at two prices.
+3. Once `LAG` is 0 (step 4 of the previous section), count the saved suggestions:
+   ```sh
+   docker compose exec postgres psql -U tax_classifier -c 'select count(*), max(created_at) from ai_suggestions'
+   ```
+   The count is 10: the second P001 reused the first one's suggestion, and its result is calculated on 26.50.
+4. Publish the same file again and wait for `LAG` 0. The output topics hold 11 more results, and the query of step 3 shows the same count and the same `max(created_at)`: no product was sent to the AI again.
+
+### Break it
+Delete the saved suggestions and publish again:
+
+```sh
+docker compose exec postgres psql -U tax_classifier -c 'truncate ai_suggestions'
+java -jar target/tax-classifier.jar publish samples/products.csv
+```
+
+Once `LAG` is 0, the query of step 3 shows 10 rows with a newer `max(created_at)`: every product was paid for again.
+
+### What it does not cover
+Two instances classifying the same product at once both pay for the AI, and the first answer stays (D21; task 15 runs two instances). A description saved once precomposed and once decomposed is two products to the store (D21).
