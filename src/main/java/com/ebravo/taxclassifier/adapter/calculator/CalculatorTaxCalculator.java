@@ -56,11 +56,11 @@ class CalculatorTaxCalculator implements TaxCalculator {
         var rates = taxableEventInSaoPaulo.getYear() >= FIRST_YEAR_OF_NOMINAL_RATES ? nominalRates : null;
         var item = new ItemRequest(1, product.ncm(), suggestion.cst(), suggestion.cClassTrib(), product.price(), rates);
         var request = new OperationRequest(product.code(), "1.0.0", taxableEventInSaoPaulo, municipality, uf, List.of(item));
-        var response = calculator.post()
+        var response = CalculatorCall.send(() -> calculator.post()
                 .uri("/observabilidade/regime-geral")
                 .body(request)
                 .retrieve()
-                .body(OperationResponse.class);
+                .body(OperationResponse.class));
         var answer = response.objetos().getFirst();
         return switch (answer.estadoItem()) {
             case CALCULADO -> response.calculated(false);

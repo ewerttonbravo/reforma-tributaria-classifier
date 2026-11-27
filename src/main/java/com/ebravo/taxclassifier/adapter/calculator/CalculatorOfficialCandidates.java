@@ -26,10 +26,10 @@ class CalculatorOfficialCandidates implements OfficialCandidates {
     }
 
     private List<TaxSituation> read(LocalDate date) {
-        return calculator.get()
-                .uri("/dados-abertos/situacoes-tributarias/cbs-ibs?data={date}", date)
-                .retrieve()
-                .body(new ParameterizedTypeReference<List<SituationResponse>>() {})
+        return CalculatorCall.send(() -> calculator.get()
+                        .uri("/dados-abertos/situacoes-tributarias/cbs-ibs?data={date}", date)
+                        .retrieve()
+                        .body(new ParameterizedTypeReference<List<SituationResponse>>() {}))
                 .stream()
                 .map(SituationResponse::toDomain)
                 .toList();
