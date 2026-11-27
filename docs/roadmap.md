@@ -1,6 +1,6 @@
 # Roadmap
 
-Approved by the maintainer on 2026-11-20; task 03 split into 03a and 03b on 2026-11-21 to stay under the size gate; task 06 split into 06a, 06b and 06c on 2026-11-23, for size and because the legal basis comes from the calculator, not the AI; task 07 split into 07a, 07b and 07c on 2026-11-24 to stay under the size gate. Task 08 split into 08a and 08b on 2026-11-25 to stay under the size gate, since the calculator requires nominal rates from 2027 on. Task 11 split into 11a and 11b on 2026-11-27 to stay under the size gate. Task 13 took over the malformed record on `produtos` on 2026-11-24, at the elucidation of task 07b. The unit of work is the task: one observable behavior, one small PR.
+Approved by the maintainer on 2026-11-20; task 03 split into 03a and 03b on 2026-11-21 to stay under the size gate; task 06 split into 06a, 06b and 06c on 2026-11-23, for size and because the legal basis comes from the calculator, not the AI; task 07 split into 07a, 07b and 07c on 2026-11-24 to stay under the size gate. Task 08 split into 08a and 08b on 2026-11-25 to stay under the size gate, since the calculator requires nominal rates from 2027 on. Task 11 split into 11a and 11b on 2026-11-27 to stay under the size gate. Task 12 split into 12a and 12b on 2026-11-27 to stay under the size gate; the same day, the retry was chosen blocking, to keep the order of scenario 5, and a `FALHA_TECNICA` was left out of it, since release `1.6.1` answers it for data missing from its own database. Task 13 took over the malformed record on `produtos` on 2026-11-24, at the elucidation of task 07b. The unit of work is the task: one observable behavior, one small PR.
 
 ## Frame of every task
 **Elucidate**, before any code:
@@ -31,7 +31,7 @@ Approved by the maintainer on 2026-11-20; task 03 split into 03a and 03b on 2026
 | 04 | Official candidates | Port + HTTP adapter: given a date, returns the official CBS/IBS list of CST / `cClassTrib` (the calculator has no list per NCM, see design D5); contract test with the fixtures from 01 | 01 |
 | 05 | Validate AI suggestion | Domain: a suggestion outside the list or below the confidence threshold → review with a reason; inside → accepted | 00 |
 | 06a | Claude adapter | Port + `claude-haiku-5-5` adapter with structured JSON output: the answer becomes a `Suggestion` with its justification; contract via HTTP stub; manual checklist with the real key | 05 |
-| 06b | AI failures | A refusal, a truncated answer (`max_tokens`), a malformed answer or an HTTP error is a failure, never a suggestion; the SDK does not retry (retry is task 12) | 06a |
+| 06b | AI failures | A refusal, a truncated answer (`max_tokens`), a malformed answer or an HTTP error is a failure, never a suggestion; the SDK does not retry (retry is task 12b) | 06a |
 | 06c | Official legal basis | Port + adapter: the official legal basis for a date and `cClassTrib`, from `GET /dados-abertos/fundamentacoes-legais`; contract with the fixtures from 01 | 01 |
 | 07a | Classify a product | Use case: the official list of the day in São Paulo, the AI's suggestion, the check and the official legal basis give a classification (without legal basis when none is published) or a review with its reason; in-memory fakes | 04, 05, 06b, 06c |
 | 07b | Classification consumer | Consumes `produtos` and publishes to `produtos-classificados` or `produtos-revisao`; confidence threshold from configuration; the publish command does not start the consumer (Testcontainers + fakes) | 03a, 07a |
@@ -42,9 +42,10 @@ Approved by the maintainer on 2026-11-20; task 03 split into 03a and 03b on 2026
 | 10 | Manual offset commit | Offset committed only after publishing; a crash before publishing → reprocessed | 09 |
 | 11a | Suggestion store | Port + PostgreSQL adapter keep the AI's suggestion per product code and a hash of its description and NCM, the price left out; `compose.yaml` runs PostgreSQL; the publish command runs without it (Testcontainers) | 10 |
 | 11b | Idempotency | A duplicate message calls the AI only once (scenario 1): its saved suggestion is checked, calculated and published again; a crash after the AI answers does not pay for it twice | 11a |
-| 12 | Retry with backoff | Calculator `FALHA_TECNICA` / timeout and AI 429 retried with backoff; calculator goes down and comes back → recovers (scenario 2) | 10 |
-| 13 | Exhausted retry → review | A permanent failure goes to `produtos-revisao` with its cause (scenario 3); a malformed record on `produtos` goes there too instead of being skipped | 12 |
-| 14 | Ordering per product | Two updates of the same product are processed in order (scenario 5) | 12 |
+| 12a | Unavailable services | A calculator or an AI that does not answer within its timeout, refuses the connection or (calculator) answers 5xx fails with a failure the ports name: `CalculatorUnavailable` and `AiFailure` `NO_ANSWER`; tested against a real stub server | 10 |
+| 12b | Retry with backoff | An unavailable calculator, an AI 429 or 5xx and an AI with no answer are retried with blocking exponential backoff; `FALHA_TECNICA` and any other failure are not; calculator goes down and comes back → recovers (scenario 2) | 12a |
+| 13 | Exhausted retry → review | A permanent failure goes to `produtos-revisao` with its cause (scenario 3); a malformed record on `produtos` goes there too instead of being skipped | 12b |
+| 14 | Ordering per product | Two updates of the same product are processed in order (scenario 5) | 12b |
 | 15 | Rebalance | 2 instances, one killed mid-processing: nothing lost, nothing duplicated (scenario 6) | 11b |
 | 16 | End to end | `docker compose up` + calculator + 1 command process the sample CSV; README with diagram, tax-liability notice and the pinned calculator version; checks that the 5 required ADRs exist | 15, 03b |
 | 17 | Release | Repository description and topics set; the repository is public since task 00 | 16; every failure scenario reproduced and broken by hand |
@@ -52,6 +53,6 @@ Approved by the maintainer on 2026-11-20; task 03 split into 03a and 03b on 2026
 Tasks 10 to 15 each close with their section in `docs/failure-scenarios.md`.
 
 ## Open decisions (settled at the elucidation of the task shown)
-- **12 × 14:** non-blocking retry (`@RetryableTopic`) moves the message to retry topics and breaks per-product ordering, which scenario 5 requires. Blocking retry (`DefaultErrorHandler` with backoff) keeps the order but stalls the partition.
+- **12 × 14** (settled on 2026-11-27, at task 12a): blocking retry (`DefaultErrorHandler` with backoff), which keeps the order of scenario 5 but stalls the consumer's partitions while it backs off. Non-blocking retry (`@RetryableTopic`) moves the message to retry topics, so a later update of the same product can overtake it. Its ADR comes with task 12b.
 
 The order follows the phases: base, AI classification, calculation, resilience, proof. Task 01 comes early because the official calculator is the largest external unknown.
