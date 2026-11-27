@@ -3,6 +3,7 @@ package com.ebravo.taxclassifier.adapter.ai;
 import com.anthropic.client.AnthropicClient;
 import com.anthropic.client.okhttp.AnthropicOkHttpClient;
 import com.anthropic.errors.AnthropicInvalidDataException;
+import com.anthropic.errors.AnthropicIoException;
 import com.anthropic.errors.AnthropicServiceException;
 import com.anthropic.models.messages.CacheControlEphemeral;
 import com.anthropic.models.messages.MessageCreateParams;
@@ -47,7 +48,7 @@ class ClaudeAiAdvisor implements AiAdvisor, AutoCloseable {
     ClaudeAiAdvisor(
             @Value("${ai.base-url}") String baseUrl, @Value("${ANTHROPIC_API_KEY:}") String apiKey, @Value("${ai.timeout}") Duration timeout) {
         // Retries belong to the classification flow, where they can be observed and tested.
-        this.claude = AnthropicOkHttpClient.builder().baseUrl(baseUrl).apiKey(apiKey).maxRetries(0).build();
+        this.claude = AnthropicOkHttpClient.builder().baseUrl(baseUrl).apiKey(apiKey).maxRetries(0).timeout(timeout).build();
     }
 
     @Override
@@ -78,6 +79,8 @@ class ClaudeAiAdvisor implements AiAdvisor, AutoCloseable {
             throw new AiFailure(e.statusCode(), e);
         } catch (AnthropicInvalidDataException e) {
             throw new AiFailure(Kind.MALFORMED, "the response is not a message", e);
+        } catch (AnthropicIoException e) {
+            throw new AiFailure(Kind.NO_ANSWER, "the AI did not answer", e);
         }
     }
 

@@ -10,8 +10,8 @@ public interface AiAdvisor {
     /**
      * The CST and cClassTrib the AI chooses for the product from the official list.
      *
-     * @throws AiFailure if the AI refuses, its answer is cut short or malformed, or the call fails with an HTTP error;
-     *     a call that gets no answer at all (no connection, timeout) is not an {@code AiFailure} until task 12
+     * @throws AiFailure if the AI refuses, its answer is cut short or malformed, the call fails with an HTTP error, or it
+     *     gets no answer at all (no connection, timeout)
      */
     Suggestion suggest(Product product, List<TaxSituation> official);
 }
