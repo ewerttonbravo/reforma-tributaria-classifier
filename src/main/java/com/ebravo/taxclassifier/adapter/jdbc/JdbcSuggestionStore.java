@@ -32,7 +32,7 @@ class JdbcSuggestionStore implements SuggestionStore {
                 .optional();
     }
 
-    /** Two instances classifying the same product at once both pay for the AI; the first answer saved stays. */
+    /** Two instances classifying the same product at once both pay for the AI; the first answer saved stays for both. */
     @Override
     public Suggestion save(Product product, Suggestion suggestion) {
         jdbc.sql("""
@@ -41,7 +41,7 @@ class JdbcSuggestionStore implements SuggestionStore {
                 .params(product.code(), inputHash(product), suggestion.cst(), suggestion.cClassTrib(),
                         suggestion.confidence(), suggestion.justification())
                 .update();
-        return suggestion;
+        return find(product).orElseThrow();
     }
 
     // The NCM's length goes first, so no NCM and description can pass for another pair, whatever reaches produtos.

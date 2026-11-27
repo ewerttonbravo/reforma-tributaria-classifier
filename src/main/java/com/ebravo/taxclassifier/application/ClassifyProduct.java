@@ -7,11 +7,11 @@ import com.ebravo.taxclassifier.domain.Product;
 import com.ebravo.taxclassifier.domain.ReviewReason;
 import com.ebravo.taxclassifier.domain.Suggestion;
 import com.ebravo.taxclassifier.domain.SuggestionCheck;
-import com.ebravo.taxclassifier.domain.TaxSituation;
 import com.ebravo.taxclassifier.domain.TaxCalculation.Calculated;
 import com.ebravo.taxclassifier.domain.TaxCalculation.InputInconsistency;
 import com.ebravo.taxclassifier.domain.TaxCalculation.NotImplemented;
 import com.ebravo.taxclassifier.domain.TaxCalculation.TechnicalFailure;
+import com.ebravo.taxclassifier.domain.TaxSituation;
 import com.ebravo.taxclassifier.domain.Verdict.Accepted;
 import com.ebravo.taxclassifier.domain.Verdict.NeedsReview;
 import java.time.Clock;
@@ -61,11 +61,12 @@ public final class ClassifyProduct {
         };
     }
 
-    /** Saved as soon as the AI answers, so a product read again after a crash is not paid for twice. */
+    /**
+     * Saved as soon as the AI answers, so a product read again after a crash is not paid for twice. Another instance may have saved
+     * its own answer meanwhile, and that one stands.
+     */
     private Suggestion ask(Product product, List<TaxSituation> official) {
-        var suggestion = advisor.suggest(product, official);
-        suggestions.save(product, suggestion);
-        return suggestion;
+        return suggestions.save(product, advisor.suggest(product, official));
     }
 
     /** Only a calculated suggestion stands, so only it needs its legal basis. */
