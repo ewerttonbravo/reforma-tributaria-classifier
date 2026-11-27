@@ -4,3 +4,12 @@ services:
     image: apache/kafka:4.2.2
     ports:
       - "9092:9092"
+  postgres:
+    # Holds the AI's suggestions, so a repeated product is not paid for again; no volume, like the broker.
+    image: postgres:18.7
+    environment:
+      POSTGRES_DB: tax_classifier
+      POSTGRES_USER: tax_classifier
+      POSTGRES_PASSWORD: tax_classifier
+    ports:
+      - "5432:5432"
