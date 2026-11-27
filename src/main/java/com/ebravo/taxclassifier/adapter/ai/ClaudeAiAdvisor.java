@@ -19,6 +19,7 @@ import com.ebravo.taxclassifier.domain.Product;
 import com.ebravo.taxclassifier.domain.Suggestion;
 import com.ebravo.taxclassifier.domain.TaxSituation;
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.util.List;
 import java.util.NoSuchElementException;
 import org.springframework.beans.factory.annotation.Value;
@@ -43,7 +44,8 @@ class ClaudeAiAdvisor implements AiAdvisor, AutoCloseable {
 
     private final AnthropicClient claude;
 
-    ClaudeAiAdvisor(@Value("${ai.base-url}") String baseUrl, @Value("${ANTHROPIC_API_KEY:}") String apiKey) {
+    ClaudeAiAdvisor(
+            @Value("${ai.base-url}") String baseUrl, @Value("${ANTHROPIC_API_KEY:}") String apiKey, @Value("${ai.timeout}") Duration timeout) {
         // Retries belong to the classification flow, where they can be observed and tested.
         this.claude = AnthropicOkHttpClient.builder().baseUrl(baseUrl).apiKey(apiKey).maxRetries(0).build();
     }

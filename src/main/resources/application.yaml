@@ -54,3 +54,4 @@ classification:
   confidence-threshold: 0.80
 ai:
   base-url: https://api.anthropic.com
+  timeout: 60s

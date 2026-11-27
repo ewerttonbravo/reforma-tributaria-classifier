@@ -5,7 +5,7 @@ import java.util.OptionalInt;
 /** The AI gave no suggestion. An HTTP error carries the status the API answered with. */
 public final class AiFailure extends RuntimeException {
 
-    public enum Kind { REFUSED, TRUNCATED, MALFORMED, HTTP_ERROR }
+    public enum Kind { REFUSED, TRUNCATED, MALFORMED, HTTP_ERROR, NO_ANSWER }
 
     private final Kind kind;
     // Integer, not OptionalInt: an exception is Serializable and OptionalInt is not.
