@@ -49,7 +49,7 @@ The service saves the AI's suggestion per product code, description and NCM as s
    ```sh
    docker compose exec postgres psql -U tax_classifier -c 'select count(*), max(created_at) from ai_suggestions'
    ```
-   The count is 10: the second P001 reused the first one's suggestion, and its result is calculated on 26.50.
+   The count is 10: the second P001 reused the first one's suggestion, and both of its results carry that suggestion, at 25.90 and 26.50.
 4. Publish the same file again and wait for `LAG` 0. The output topics hold 11 more results, and the query of step 3 shows the same count and the same `max(created_at)`: no product was sent to the AI again.
 
 ### Break it
