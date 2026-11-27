@@ -26,6 +26,15 @@ spring:
     listener:
       # Commits each record once the listener returns, after its result is sent; a crash reprocesses only that record.
       ack-mode: record
+  datasource:
+    url: jdbc:postgresql://localhost:5432/tax_classifier
+    # Local demo credentials, the same as compose.yaml; SPRING_DATASOURCE_USERNAME and _PASSWORD override them.
+    username: tax_classifier
+    password: tax_classifier
+  sql:
+    init:
+      # Creates the suggestions table on start if it is missing (schema.sql).
+      mode: always
 calculator:
   base-url: http://localhost:8080/api/calculadora
   # Where the operation takes place (IBGE code); the products CSV has no location.

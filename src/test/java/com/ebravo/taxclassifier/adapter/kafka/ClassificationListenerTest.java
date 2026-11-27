@@ -54,6 +54,7 @@ import org.springframework.kafka.listener.MessageListenerContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.kafka.KafkaContainer;
+import org.testcontainers.postgresql.PostgreSQLContainer;
 
 // The threshold is above the default, so a review at 0.85 proves it is read from configuration.
 @SpringBootTest(properties = "classification.confidence-threshold=0.90")
@@ -63,6 +64,10 @@ class ClassificationListenerTest {
     @Container
     @ServiceConnection
     static final KafkaContainer KAFKA = new KafkaContainer("apache/kafka:4.2.2");
+
+    @Container
+    @ServiceConnection
+    static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:18.7");
 
     private static final List<TaxSituation> OFFICIAL = List.of(
             new TaxSituation("200", "Alíquota reduzida", List.of(

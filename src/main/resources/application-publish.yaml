@@ -2,6 +2,10 @@
 spring:
   main:
     banner-mode: off
+  # Publishing never reads the suggestions, so it runs without the database.
+  sql:
+    init:
+      mode: never
 logging:
   level:
     root: warn

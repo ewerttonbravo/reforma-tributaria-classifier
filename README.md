@@ -10,7 +10,7 @@ Skeleton, the official calculator and publishing a products CSV to Kafka: the bu
 
 ## Build and test
 
-Requires JDK 25 and a running Docker engine: the Kafka tests start a real broker with Testcontainers. The Maven Wrapper downloads Maven on first use.
+Requires JDK 25 and a running Docker engine: the Kafka and PostgreSQL tests start a real broker and database with Testcontainers. The Maven Wrapper downloads Maven on first use.
 
 With Colima instead of Docker Desktop, point Testcontainers at its socket first:
 
@@ -29,15 +29,15 @@ export TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE=/var/run/docker.sock
 
 ## Publish products
 
-Start Kafka, build the jar once and publish the sample catalog of fictitious products:
+Start Kafka and PostgreSQL, build the jar once and publish the sample catalog of fictitious products:
 
 ```sh
-docker compose up -d                                       # Kafka 4.2.2 in KRaft mode on localhost:9092
+docker compose up -d                                       # Kafka 4.2.2 (KRaft) on :9092, PostgreSQL 18.7 on :5432
 ./mvnw -DskipTests package
 java -jar target/tax-classifier.jar publish samples/products.csv
 ```
 
-The file is a UTF-8 CSV with the header `code;description;ncm;price` (a byte order mark is accepted). Each product goes to the `produtos` topic keyed by its code. The command prints one summary line and exits with:
+Publishing does not use the database. The file is a UTF-8 CSV with the header `code;description;ncm;price` (a byte order mark is accepted). Each product goes to the `produtos` topic keyed by its code. The command prints one summary line and exits with:
 
 | Code | Meaning |
 |---|---|
@@ -98,14 +98,14 @@ post < $F/regime-geral-p001-2027-request.json | cmp - $F/regime-geral-p001-2027-
 
 ## Classify products
 
-With Kafka and the calculator running and products published, start the classification service with a Claude API key:
+With Kafka, PostgreSQL and the calculator running and products published, start the classification service with a Claude API key:
 
 ```sh
 export ANTHROPIC_API_KEY=...                # every product is one paid call to claude-haiku-5-5
 java -jar target/tax-classifier.jar         # Ctrl-C to stop
 ```
 
-The service consumes `produtos` as the consumer group `tax-classifier`, from the earliest offset on its first run. An accepted suggestion is calculated by the official calculator: when it calculates, the product goes to `produtos-classificados` with the official legal basis (`null` when none is published) and the CBS and IBS amounts, flagged `simulated` from 2027; when it rejects the item (`INCONSISTENCIA_ENTRADA`, such as `REG-011` for a `cClassTrib` not linked to the NCM, or `NAO_IMPLEMENTADO`), the product goes to `produtos-revisao` with the calculator's errors. A suggestion outside the official list or below the confidence threshold goes to `produtos-revisao` with its reason, without being calculated. The threshold is 0.80; change it with `--classification.confidence-threshold=0.90`. Until retries exist (task 12), a product whose classification fails, a calculator `FALHA_TECNICA` included, is logged and skipped, and so is a record on `produtos` that is not a product's JSON.
+The service consumes `produtos` as the consumer group `tax-classifier`, from the earliest offset on its first run. An accepted suggestion is calculated by the official calculator: when it calculates, the product goes to `produtos-classificados` with the official legal basis (`null` when none is published) and the CBS and IBS amounts, flagged `simulated` from 2027; when it rejects the item (`INCONSISTENCIA_ENTRADA`, such as `REG-011` for a `cClassTrib` not linked to the NCM, or `NAO_IMPLEMENTADO`), the product goes to `produtos-revisao` with the calculator's errors. A suggestion outside the official list or below the confidence threshold goes to `produtos-revisao` with its reason, without being calculated. The threshold is 0.80; change it with `--classification.confidence-threshold=0.90`. On start the service creates the table `ai_suggestions` in the PostgreSQL of `spring.datasource.url` (`jdbc:postgresql://localhost:5432/tax_classifier`), with the local credentials of `compose.yaml`; `SPRING_DATASOURCE_USERNAME` and `SPRING_DATASOURCE_PASSWORD` override them. The database has no volume, so `docker compose down` deletes it with the topics. Until retries exist (task 12), a product whose classification fails, a calculator `FALHA_TECNICA` included, is logged and skipped, and so is a record on `produtos` that is not a product's JSON.
 
 See the results:
 
