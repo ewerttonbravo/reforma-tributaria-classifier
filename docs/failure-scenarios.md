@@ -63,4 +63,4 @@ java -jar target/tax-classifier.jar publish samples/products.csv
 Once `LAG` is 0, the query of step 3 shows 10 rows with a newer `max(created_at)`: every product was paid for again.
 
 ### What it does not cover
-Two instances classifying the same product at once both pay for the AI, and the first answer stays (D21; task 15 runs two instances). A description saved once precomposed and once decomposed is two products to the store (D21).
+Two instances classifying the same product at once both pay for the AI, and both publish the first answer saved (D21, D22; task 15 runs two instances). A description saved once precomposed and once decomposed is two products to the store (D21).
