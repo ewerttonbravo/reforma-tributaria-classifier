@@ -20,6 +20,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.AfterEach;
@@ -43,6 +44,8 @@ class ClaudeAiAdvisorTest {
 
     private static final Duration TIMEOUT = Duration.ofSeconds(10);
 
+    // A thread per request, so a second request is counted even while the first is held.
+    private final ExecutorService requestThreads = Executors.newCachedThreadPool();
     private HttpServer claude;
     private ClaudeAiAdvisor advisor;
     // Written on the stub's thread, read on the test's.
@@ -70,8 +73,7 @@ class ClaudeAiAdvisorTest {
             exchange.getResponseBody().write(response);
             exchange.close();
         });
-        // A thread per request, so a second request is counted even while the first is held.
-        claude.setExecutor(Executors.newCachedThreadPool());
+        claude.setExecutor(requestThreads);
         claude.start();
         status = 200;
         response = recorded("messages-structured-response.json");
@@ -83,6 +85,7 @@ class ClaudeAiAdvisorTest {
         advisor.close();
         release.countDown();
         claude.stop(0);
+        requestThreads.shutdownNow();
     }
 
     @Test

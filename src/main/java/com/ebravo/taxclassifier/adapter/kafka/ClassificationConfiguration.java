@@ -26,7 +26,7 @@ class ClassificationConfiguration {
                 Clock.systemUTC());
     }
 
-    /** No retry until task 12: Spring's default tries a failed record 10 times, each one a paid call to the AI. */
+    /** No retry until task 12b: Spring's default tries a failed record 10 times, each one a paid call to the AI. */
     @Bean
     DefaultErrorHandler errorHandler() {
         return new DefaultErrorHandler(new FixedBackOff(0, 0));
