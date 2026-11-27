@@ -10,6 +10,6 @@ public interface SuggestionStore {
     /** The suggestion saved for a product with the same code, description and NCM; the price does not count, as the AI never sees it. */
     Optional<Suggestion> find(Product product);
 
-    /** Saves the AI's suggestion for the product; a suggestion already saved for it is kept. */
-    void save(Product product, Suggestion suggestion);
+    /** Saves the AI's suggestion for the product unless one is saved already, and returns the one that stays. */
+    Suggestion save(Product product, Suggestion suggestion);
 }

@@ -26,6 +26,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Predicate;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -85,7 +86,8 @@ class ClassificationListenerTest {
             "P007", new Suggestion("200", "200003", new BigDecimal("0.95"), "Arroz integra a cesta básica."),
             "P008", new Suggestion("200", "200035", new BigDecimal("0.95"), "Arroz parece ter alíquota reduzida."),
             "P009", new Suggestion("200", "200003", new BigDecimal("0.95"), "Arroz integra a cesta básica."),
-            "P010", new Suggestion("200", "200003", new BigDecimal("0.95"), "Arroz integra a cesta básica."));
+            "P010", new Suggestion("200", "200003", new BigDecimal("0.95"), "Arroz integra a cesta básica."),
+            "P011", new Suggestion("200", "200003", new BigDecimal("0.95"), "Arroz integra a cesta básica."));
     /** REG-011 as release 1.6.1 answered it for P001 under 200035. */
     private static final CalculationError NOT_LINKED = new CalculationError("REG-011",
             "NCM de código 10063021 não vinculada à Classificação Tributária de código 200035 (CBS e IBS)");
@@ -194,8 +196,21 @@ class ClassificationListenerTest {
             registry.start();
         }
 
+        // The service died after the AI answered, so the saved suggestion is reused.
         assertThat(recordWithKey("produtos-classificados", "P009")).isNotNull();
-        assertThat(ADVISED).filteredOn("P009"::equals).hasSize(2);
+        assertThat(ADVISED).filteredOn("P009"::equals).hasSize(1);
+    }
+
+    @Test
+    void repeatedProductDoesNotCallTheAiAgain() {
+        var rice = new Product("P011", "Arroz branco 1kg", "10063021", new BigDecimal("3.00"));
+        var newPrice = new Product("P011", "Arroz branco 1kg", "10063021", new BigDecimal("4.00"));
+
+        publisher.publish(List.of(rice, rice, newPrice));
+
+        // One partition per key, so the new price is classified after both copies, and calculated on its own price.
+        assertThat(recordWithKey("produtos-classificados", "P011", value -> value.contains("\"base\":\"4.00\""))).isNotNull();
+        assertThat(ADVISED).filteredOn("P011"::equals).hasSize(1);
     }
 
     @Test
@@ -228,8 +243,12 @@ class ClassificationListenerTest {
                 .isEqualTo(AckMode.RECORD);
     }
 
-    /** Reads the topic from the beginning until a record with the key shows up. */
     private static ConsumerRecord<String, String> recordWithKey(String topic, String key) {
+        return recordWithKey(topic, key, value -> true);
+    }
+
+    /** Reads the topic from the beginning until a record with the key and a matching value shows up. */
+    private static ConsumerRecord<String, String> recordWithKey(String topic, String key, Predicate<String> value) {
         var config = Map.<String, Object>of(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, KAFKA.getBootstrapServers());
         try (var consumer = new KafkaConsumer<>(config, new StringDeserializer(), new StringDeserializer())) {
             var partitions = consumer.partitionsFor(topic).stream()
@@ -240,7 +259,7 @@ class ClassificationListenerTest {
             var deadline = Instant.now().plusSeconds(30);
             while (Instant.now().isBefore(deadline)) {
                 for (var record : consumer.poll(Duration.ofMillis(500))) {
-                    if (key.equals(record.key())) {
+                    if (key.equals(record.key()) && value.test(record.value())) {
                         return record;
                     }
                 }

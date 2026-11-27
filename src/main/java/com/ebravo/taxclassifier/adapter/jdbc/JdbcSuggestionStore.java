@@ -32,15 +32,16 @@ class JdbcSuggestionStore implements SuggestionStore {
                 .optional();
     }
 
-    /** Two instances classifying the same product at once both pay for the AI; the first answer saved stays. */
+    /** Two instances classifying the same product at once both pay for the AI; the first answer saved stays for both. */
     @Override
-    public void save(Product product, Suggestion suggestion) {
+    public Suggestion save(Product product, Suggestion suggestion) {
         jdbc.sql("""
                         INSERT INTO ai_suggestions (product_code, input_hash, cst, c_class_trib, confidence, justification)
                         VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING""")
                 .params(product.code(), inputHash(product), suggestion.cst(), suggestion.cClassTrib(),
                         suggestion.confidence(), suggestion.justification())
                 .update();
+        return find(product).orElseThrow();
     }
 
     // The NCM's length goes first, so no NCM and description can pass for another pair, whatever reaches produtos.
