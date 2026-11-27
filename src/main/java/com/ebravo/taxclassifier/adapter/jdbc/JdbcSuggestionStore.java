@@ -7,6 +7,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
+import java.util.Objects;
 import java.util.Optional;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
@@ -42,11 +43,13 @@ class JdbcSuggestionStore implements SuggestionStore {
                 .update();
     }
 
-    // The NCM always has 8 digits, so NCM followed by description cannot match another pair.
+    // The NCM's length goes first, so no NCM and description can pass for another pair, whatever reaches produtos.
     private static String inputHash(Product product) {
+        var ncm = Objects.requireNonNull(product.ncm(), "ncm");
+        var description = Objects.requireNonNull(product.description(), "description");
         try {
             var digest = MessageDigest.getInstance("SHA-256")
-                    .digest((product.ncm() + product.description()).getBytes(StandardCharsets.UTF_8));
+                    .digest((ncm.length() + ":" + ncm + description).getBytes(StandardCharsets.UTF_8));
             return HexFormat.of().formatHex(digest);
         } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException("every JDK has SHA-256", e);

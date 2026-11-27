@@ -28,7 +28,7 @@ spring:
       ack-mode: record
   datasource:
     url: jdbc:postgresql://localhost:5432/tax_classifier
-    # Local demo credentials, the same as compose.yaml; SPRING_DATASOURCE_PASSWORD overrides them.
+    # Local demo credentials, the same as compose.yaml; SPRING_DATASOURCE_USERNAME and _PASSWORD override them.
     username: tax_classifier
     password: tax_classifier
   sql:
