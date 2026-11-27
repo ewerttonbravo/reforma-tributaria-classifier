@@ -10,6 +10,7 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
+import com.ebravo.taxclassifier.application.CalculatorUnavailable;
 import com.ebravo.taxclassifier.application.TaxCalculator;
 import com.ebravo.taxclassifier.domain.CalculationError;
 import com.ebravo.taxclassifier.domain.Product;
@@ -180,6 +181,13 @@ class CalculatorTaxCalculatorTest {
         assertThatThrownBy(() -> calculator.calculate(RICE, FULL_TAXATION, LATE_EVENING))
                 .isInstanceOfSatisfying(RestClientResponseException.class,
                         error -> assertThat(error.getStatusCode().value()).isEqualTo(422));
+    }
+
+    @Test
+    void calculatorServerErrorIsUnavailable() {
+        server.expect(requestTo(REGIME_GERAL)).andRespond(withStatus(HttpStatus.SERVICE_UNAVAILABLE));
+
+        assertThatThrownBy(() -> calculator.calculate(RICE, FULL_TAXATION, LATE_EVENING)).isInstanceOf(CalculatorUnavailable.class);
     }
 
     private static String recorded(String name) {

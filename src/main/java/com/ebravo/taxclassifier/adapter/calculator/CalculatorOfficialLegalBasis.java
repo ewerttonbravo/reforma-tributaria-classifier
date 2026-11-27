@@ -32,10 +32,10 @@ class CalculatorOfficialLegalBasis implements OfficialLegalBasis {
     }
 
     private List<LegalBasisResponse> read(LocalDate date) {
-        return calculator.get()
+        return CalculatorCall.send(() -> calculator.get()
                 .uri("/dados-abertos/fundamentacoes-legais?data={date}", date)
                 .retrieve()
-                .body(new ParameterizedTypeReference<List<LegalBasisResponse>>() {});
+                .body(new ParameterizedTypeReference<List<LegalBasisResponse>>() {}));
     }
 
     /** The calculator's field names; the CST, the descriptions and the tax set stay out. */

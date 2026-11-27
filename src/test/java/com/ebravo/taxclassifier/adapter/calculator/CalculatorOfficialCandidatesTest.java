@@ -11,6 +11,7 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withServerError;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
+import com.ebravo.taxclassifier.application.CalculatorUnavailable;
 import com.ebravo.taxclassifier.application.OfficialCandidates;
 import com.ebravo.taxclassifier.domain.TaxClassification;
 import com.ebravo.taxclassifier.domain.TaxSituation;
@@ -99,12 +100,10 @@ class CalculatorOfficialCandidatesTest {
     }
 
     @Test
-    void calculatorServerErrorIsNeverAnEmptyList() {
+    void calculatorServerErrorIsUnavailableNeverAnEmptyList() {
         calculator.expect(requestTo(LIST_FOR_DATE + "2027-03-10")).andRespond(withServerError());
 
-        assertThatThrownBy(() -> candidates.on(LocalDate.of(2027, 3, 10)))
-                .isInstanceOfSatisfying(RestClientResponseException.class,
-                        error -> assertThat(error.getStatusCode().value()).isEqualTo(500));
+        assertThatThrownBy(() -> candidates.on(LocalDate.of(2027, 3, 10))).isInstanceOf(CalculatorUnavailable.class);
     }
 
     private static ClassPathResource recorded(String file) {

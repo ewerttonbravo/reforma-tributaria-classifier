@@ -9,6 +9,7 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withServerError;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
+import com.ebravo.taxclassifier.application.CalculatorUnavailable;
 import com.ebravo.taxclassifier.application.OfficialLegalBasis;
 import com.ebravo.taxclassifier.domain.LegalBasis;
 import java.time.LocalDate;
@@ -18,7 +19,6 @@ import org.springframework.boot.restclient.test.autoconfigure.RestClientTest;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.web.client.MockRestServiceServer;
-import org.springframework.web.client.RestClientResponseException;
 
 /** Replays the legal bases recorded from the official calculator at tag 1.6.1 for 2027-03-10. */
 @RestClientTest(
@@ -80,12 +80,10 @@ class CalculatorOfficialLegalBasisTest {
     }
 
     @Test
-    void calculatorErrorIsNeverAMissingLegalBasis() {
+    void calculatorServerErrorIsUnavailableNeverAMissingLegalBasis() {
         calculator.expect(requestTo(BASES_FOR_DATE)).andRespond(withServerError());
 
-        assertThatThrownBy(() -> legalBasis.of("000002", DATE))
-                .isInstanceOfSatisfying(RestClientResponseException.class,
-                        error -> assertThat(error.getStatusCode().value()).isEqualTo(500));
+        assertThatThrownBy(() -> legalBasis.of("000002", DATE)).isInstanceOf(CalculatorUnavailable.class);
     }
 
     /** A null code is a caller's bug, so it must not get the official answer of 220001; no request is expected. */

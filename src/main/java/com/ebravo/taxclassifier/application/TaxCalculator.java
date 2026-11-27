@@ -7,6 +7,7 @@ import java.time.Instant;
 
 public interface TaxCalculator {
 
-    /** CBS and IBS of the product under the suggested CST and cClassTrib, for a taxable event at the instant; throws if the calculator cannot be asked. */
+    /** CBS and IBS of the product under the suggested CST and cClassTrib, for a taxable event at the instant; throws if the calculator cannot be asked:
+     * {@link CalculatorUnavailable} if it does not answer or answers with a server error. */
     TaxCalculation calculate(Product product, Suggestion suggestion, Instant taxableEvent);
 }

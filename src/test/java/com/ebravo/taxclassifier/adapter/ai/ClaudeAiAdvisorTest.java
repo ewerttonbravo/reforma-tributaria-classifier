@@ -1,7 +1,9 @@
 package com.ebravo.taxclassifier.adapter.ai;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.catchThrowableOfType;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 
 import com.ebravo.taxclassifier.application.AiFailure;
 import com.ebravo.taxclassifier.application.AiFailure.Kind;
@@ -15,7 +17,11 @@ import java.io.InputStream;
 import java.math.BigDecimal;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -36,6 +42,10 @@ class ClaudeAiAdvisorTest {
             new TaxSituation("200", "Alíquota reduzida", List.of(
                     new TaxClassification("200003", "Vendas de produtos destinados à alimentação humana (Anexo I)"))));
 
+    private static final Duration TIMEOUT = Duration.ofSeconds(10);
+
+    // A thread per request, so a second request is counted even while the first is held.
+    private final ExecutorService requestThreads = Executors.newCachedThreadPool();
     private HttpServer claude;
     private ClaudeAiAdvisor advisor;
     // Written on the stub's thread, read on the test's.
@@ -44,12 +54,18 @@ class ClaudeAiAdvisorTest {
     private volatile int status;
     private volatile byte[] response;
     private final AtomicInteger requests = new AtomicInteger();
+    /** Held stubs answer only once it is released. */
+    private final CountDownLatch release = new CountDownLatch(1);
+    private volatile boolean held;
 
     @BeforeEach
     void startStub() throws IOException {
         claude = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
         claude.createContext("/v1/messages", exchange -> {
             requests.incrementAndGet();
+            if (held) {
+                awaitRelease();
+            }
             request = JsonMapper.shared().readTree(exchange.getRequestBody());
             authorization = exchange.getRequestHeaders().getFirst("Authorization");
             exchange.getResponseHeaders().add("Content-Type", "application/json");
@@ -57,16 +73,19 @@ class ClaudeAiAdvisorTest {
             exchange.getResponseBody().write(response);
             exchange.close();
         });
+        claude.setExecutor(requestThreads);
         claude.start();
         status = 200;
         response = recorded("messages-structured-response.json");
-        advisor = new ClaudeAiAdvisor("http://localhost:" + claude.getAddress().getPort(), "test-key");
+        advisor = new ClaudeAiAdvisor(stubUrl(), "test-key", TIMEOUT);
     }
 
     @AfterEach
     void stopStub() {
         advisor.close();
+        release.countDown();
         claude.stop(0);
+        requestThreads.shutdownNow();
     }
 
     @Test
@@ -180,6 +199,27 @@ class ClaudeAiAdvisorTest {
         assertThat(requests).hasValue(1);
     }
 
+    /** Fails instead of hanging when the timeout is not applied. */
+    @Test
+    void aiThatDoesNotAnswerIsAFailureSentOnce() {
+        held = true;
+
+        try (var impatient = new ClaudeAiAdvisor(stubUrl(), "test-key", Duration.ofMillis(200))) {
+            assertTimeoutPreemptively(Duration.ofSeconds(5), () -> assertThatThrownBy(() -> impatient.suggest(BEANS, OFFICIAL))
+                    .isInstanceOfSatisfying(AiFailure.class, failure -> assertThat(failure.kind()).isEqualTo(Kind.NO_ANSWER)));
+        }
+        assertThat(requests).hasValue(1);
+    }
+
+    // Port 1 is reserved and has no listener on a developer's machine or a CI runner, so the connection is refused.
+    @Test
+    void aiThatRefusesTheConnectionIsAFailure() {
+        try (var unreachable = new ClaudeAiAdvisor("http://localhost:1", "test-key", TIMEOUT)) {
+            assertThatThrownBy(() -> unreachable.suggest(BEANS, OFFICIAL))
+                    .isInstanceOfSatisfying(AiFailure.class, failure -> assertThat(failure.kind()).isEqualTo(Kind.NO_ANSWER));
+        }
+    }
+
     /** The recorded end_turn response with its content replaced by the given block. */
     private void finishedWith(JsonNode block) throws IOException {
         var message = (ObjectNode) JsonMapper.shared().readTree(recorded("messages-structured-response.json"));
@@ -192,6 +232,18 @@ class ClaudeAiAdvisorTest {
         var message = (ObjectNode) JsonMapper.shared().readTree(recorded("messages-structured-response.json"));
         message.put("stop_reason", stopReason);
         response = JsonMapper.shared().writeValueAsBytes(message);
+    }
+
+    private String stubUrl() {
+        return "http://localhost:" + claude.getAddress().getPort();
+    }
+
+    private void awaitRelease() {
+        try {
+            release.await();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
     }
 
     private AiFailure failure() {
