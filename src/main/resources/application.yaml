@@ -17,7 +17,7 @@ spring:
       auto-offset-reset: earliest
       # Each record waits on the AI; a poll of 500 could outlast max.poll.interval.ms and be classified again.
       max-poll-records: 1
-      # Hands a record that is not a product's JSON to the error handler, which skips it, instead of failing every poll.
+      # Hands a record that is not a product's JSON to the error handler, which sends it to review, instead of failing every poll.
       value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
       properties:
         spring.deserializer.value.delegate.class: org.springframework.kafka.support.serializer.JacksonJsonDeserializer
@@ -58,6 +58,9 @@ classification:
     multiplier: 2
     max-interval: 30s
     max-retries: 6
+  review:
+    # Sends of a failed record to produtos-revisao before it is logged and skipped; each one classifies the record again.
+    max-attempts: 3
 ai:
   base-url: https://api.anthropic.com
   timeout: 60s

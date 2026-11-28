@@ -41,11 +41,12 @@ class ClassificationConfiguration {
             @Value("${classification.retry.multiplier}") double multiplier,
             @Value("${classification.retry.max-interval}") Duration maxInterval,
             @Value("${classification.retry.max-retries}") int maxRetries,
+            @Value("${classification.review.max-attempts}") int reviewAttempts,
             KafkaTemplate<String, Object> kafka) {
         var backOff = new ExponentialBackOff(initialInterval.toMillis(), multiplier);
         backOff.setMaxInterval(maxInterval.toMillis());
         backOff.setMaxAttempts(maxRetries);
-        var handler = new DefaultErrorHandler(new ReviewRecoverer(kafka), backOff);
+        var handler = new DefaultErrorHandler(new ReviewRecoverer(kafka, reviewAttempts), backOff);
         handler.defaultFalse();
         handler.addRetryableExceptions(CalculatorUnavailable.class, AiUnavailable.class);
         return handler;

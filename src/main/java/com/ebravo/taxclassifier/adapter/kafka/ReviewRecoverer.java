@@ -2,6 +2,8 @@ package com.ebravo.taxclassifier.adapter.kafka;
 
 import com.ebravo.taxclassifier.adapter.kafka.ClassificationListener.ReviewMessage;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.springframework.core.log.LogAccessor;
 import org.springframework.kafka.core.KafkaTemplate;
@@ -20,18 +22,33 @@ final class ReviewRecoverer implements ConsumerRecordRecoverer {
     private static final LogAccessor LOG = new LogAccessor(ReviewRecoverer.class);
 
     private final KafkaTemplate<String, Object> kafka;
+    private final int maxAttempts;
+    /** Failed sends by record position; a send that fails makes the error handler read the record again. */
+    private final Map<String, Integer> failedSends = new ConcurrentHashMap<>();
 
-    ReviewRecoverer(KafkaTemplate<String, Object> kafka) {
+    ReviewRecoverer(KafkaTemplate<String, Object> kafka, int maxAttempts) {
         this.kafka = kafka;
+        this.maxAttempts = maxAttempts;
     }
 
     @Override
     public void accept(ConsumerRecord<?, ?> record, Exception exception) {
-        LOG.error(exception, () -> "Sending to review after its classification failed: " + KafkaUtils.format(record));
+        var position = KafkaUtils.format(record);
+        LOG.error(exception, () -> "Sending to review after its classification failed: " + position);
         var product = record.value() instanceof ProductMessage message ? message : null;
         var cause = ErrorHandlingUtils.findRootCause(exception).getMessage();
-        // Waits for the send: if it fails, the error handler reads the record again instead of committing it with no result.
-        kafka.send(ClassificationListener.REVIEW_TOPIC, (String) record.key(),
-                new ReviewMessage(product, null, FAILED, List.of(), cause)).join();
+        try {
+            kafka.send(ClassificationListener.REVIEW_TOPIC, (String) record.key(),
+                    new ReviewMessage(product, null, FAILED, List.of(), cause)).join();
+            failedSends.remove(position);
+        } catch (RuntimeException sendFailure) {
+            // Each round classifies the record again, which may pay for the AI again, so the rounds are limited.
+            int failures = failedSends.merge(position, 1, Integer::sum);
+            if (failures < maxAttempts) {
+                throw sendFailure;
+            }
+            failedSends.remove(position);
+            LOG.error(sendFailure, () -> "Gave up sending to review after " + failures + " attempts, skipping: " + position);
+        }
     }
 }
