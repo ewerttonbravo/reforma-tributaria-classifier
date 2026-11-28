@@ -21,7 +21,7 @@ The service commits a product's offset only after its result is sent (D20). A pr
      docker compose exec kafka /opt/kafka/bin/kafka-get-offsets.sh --bootstrap-server localhost:9092 --topic $topic
    done
    ```
-   The sum of `CURRENT-OFFSET` over the partitions of `produtos` is the number of products committed; the offsets of the two output topics add up to the results published. Committed is never above published: no product was committed without its result. This holds only if the service logged no failed classification, since until task 13 a failure is skipped and its offset committed with no result (trade-off "Failed classification"). `LAG` above 0 shows products still to classify, read or not.
+   The sum of `CURRENT-OFFSET` over the partitions of `produtos` is the number of products committed; the offsets of the two output topics add up to the results published. Committed is never above published: no product was committed without its result. A product whose classification failed counts as published too, since it goes to review before its offset is committed (D25); the only exception is a product logged as `Gave up sending to review`, committed with no result (trade-off "Review send failure"). `LAG` above 0 shows products still to classify, read or not.
 5. Start the service again. The broker keeps the dead consumer in the group until its session times out (`session.timeout.ms`), so the new one may sit idle before it gets the partitions. Compare only once it is done or stopped: the commands of step 4 run seconds apart, so while the service consumes they read different moments. Once it is done, `LAG` is 0 on every partition and every product of the sample is on `produtos-classificados` or `produtos-revisao` (see the README).
 
 ### Break it
@@ -90,7 +90,52 @@ Turn the retries off and repeat with the calculator stopped:
 java -jar target/tax-classifier.jar --classification.retry.max-retries=0
 ```
 
-Each product is tried once and skipped, logged at ERROR as `Backoff none exhausted` with the `CalculatorUnavailable` that caused it: none reaches an output topic, and `LAG` still drops to 0, since a skipped record's offset is committed. The same happens with the retries on when the calculator stays down for more than a minute: run by hand, a product was tried 7 times, 1, 2, 4, 8, 16 and 30 s apart, then logged as `Backoff ExponentialBackOffExecution[currentInterval=30000ms, multiplier=2.0, attempts=6] exhausted` 61 s after its first failure, and skipped; the next one gets a fresh minute.
+Each product is tried once and sent to `produtos-revisao` as `FAILED`, with the `CalculatorUnavailable` that caused it (next section), instead of waiting for the calculator: run by hand, it reached review 0.7 s after it was published. The same happens with the retries on when the calculator stays down for more than a minute: run by hand, a product was tried 7 times, 1, 2, 4, 8, 16 and 30 s apart, and reached review 62 s after it was published; the next one gets a fresh minute.
 
 ### What it does not cover
-A skipped product reaches no output topic until task 13 sends it to review (trade-off "Failed classification"). A failure of PostgreSQL or of the send is not retried (trade-off "Database and send without retry").
+A product whose retries ran out goes to review, not back to the calculator once it returns: someone has to publish it again. A failure of PostgreSQL or of the send is not retried (trade-off "Database and send without retry").
+
+## Permanent failure (task 13)
+
+A product whose classification fails for good, such as a refusal of the AI or a 4xx from the calculator, or whose retries ran out, goes to `produtos-revisao` with `reason` `FAILED` and the failure's message as `cause`, and only then is its offset committed (D25). A record on `produtos` that is not a product's JSON goes there too, with `product: null`, and a product missing a field goes with the field named. No product is left without a result.
+
+### Reproduce
+The calculator stays stopped from the start, so the product fails at the official list, before the AI is asked.
+
+0. Start from an empty broker and database, `docker compose down && docker compose up -d`, with the calculator stopped.
+1. Start the service with a Claude API key: `java -jar target/tax-classifier.jar`.
+2. Publish one product and read the review topic:
+   ```sh
+   printf 'code;description;ncm;price\nP200;Arroz tipo 1 5kg;10063021;25.90\n' > /tmp/one.csv
+   java -jar target/tax-classifier.jar publish /tmp/one.csv
+   docker compose exec kafka /opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 \
+     --topic produtos-revisao --from-beginning --property print.key=true
+   ```
+   Run by hand, P200 reached review 62 s after it was published, once its retries ran out (previous section):
+   ```
+   P200	{"product":{"code":"P200","description":"Arroz tipo 1 5kg","ncm":"10063021","price":"25.90"},"suggestion":null,"reason":"FAILED","errors":[],"cause":"the calculator is unavailable: I/O error on GET request for \"http://localhost:8080/api/calculadora/dados-abertos/situacoes-tributarias/cbs-ibs\": null"}
+   ```
+3. Send a record that is not JSON and a product without its NCM straight to `produtos`:
+   ```sh
+   printf 'P201:oops\nP202:{"code":"P202","description":"Feijão carioca 1kg","price":"8.49"}\n' |
+     docker compose exec -T kafka /opt/kafka/bin/kafka-console-producer.sh --bootstrap-server localhost:9092 \
+       --topic produtos --property parse.key=true --property key.separator=:
+   ```
+   Both reach review at once, with no retry:
+   ```
+   P201	{"product":null,"suggestion":null,"reason":"FAILED","errors":[],"cause":"failed to deserialize"}
+   P202	{"product":{"code":"P202","description":"Feijão carioca 1kg","ncm":null,"price":"8.49"},"suggestion":null,"reason":"FAILED","errors":[],"cause":"the product has no ncm"}
+   ```
+4. `LAG` is 0 on every partition (step 4 of the first section): the three records were committed after their reviews were sent.
+
+### Break it
+Put back the error handler's default recoverer, which logs a failed record and skips it, in `ClassificationConfiguration`:
+
+```java
+var handler = new DefaultErrorHandler(backOff);
+```
+
+and run `./mvnw -Dtest=ClassificationListenerTest#permanentFailureGoesToReviewWithItsCause test`. It fails with `no record with key P003 in produtos-revisao`: the refused product was committed with no result.
+
+### What it does not cover
+A failed send to `produtos-revisao` classifies the record again, up to 3 times, then logs it at ERROR and skips it (trade-off "Review send failure"); with one broker, this cannot be caused by hand without stopping the consumer too, so `ReviewRecovererTest` covers it. A malformed record's review carries neither its value nor its offset (trade-off "Malformed record in review"). A result whose own send failed reaches review as `FAILED`, without its suggestion (D25).
