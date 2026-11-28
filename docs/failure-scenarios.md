@@ -64,3 +64,26 @@ Once `LAG` is 0, the query of step 3 shows 10 rows with a newer `max(created_at)
 
 ### What it does not cover
 Two instances classifying the same product at once both pay for the AI, and both publish the first answer saved (D21, D22; task 15 runs two instances). A description saved once precomposed and once decomposed is two products to the store (D21).
+
+## Calculator down and back (task 12b)
+
+A calculator that does not answer, refuses the connection or answers 5xx fails as `CalculatorUnavailable` (D23), and the listener retries the product in place, with waits of 1, 2, 4, 8, 16 and 30 s (D24). The products behind it on the consumer's partitions wait too, so their order holds. A calculator back within that minute classifies the product, and the AI is not paid again, since its suggestion was saved before the calculation (D22).
+
+### Reproduce
+0. Start from an empty broker and database: `docker compose down && docker compose up -d`. Leave the calculator stopped.
+1. Start the service with a Claude API key: `java -jar target/tax-classifier.jar`.
+2. Publish the sample: `java -jar target/tax-classifier.jar publish samples/products.csv`. The service fails to read the official list and retries; the log shows each failed attempt with `the calculator is unavailable`.
+3. Within 20 s, start the calculator (see the README); it takes 19 to 23 s to start. Once it answers, the next attempt goes through and the products are classified.
+4. Once `LAG` is 0 (step 4 of the first section), every product of the sample is on `produtos-classificados` or `produtos-revisao`, and the count of saved suggestions (step 3 of the previous section) is 10: the retries did not pay for the AI again.
+
+### Break it
+Turn the retries off and repeat with the calculator stopped:
+
+```sh
+java -jar target/tax-classifier.jar --classification.retry.max-retries=0
+```
+
+Each product is tried once and skipped: none reaches an output topic, and `LAG` still drops to 0, since a skipped record's offset is committed. The same happens with the retries on when the calculator stays down for more than a minute: the product being retried is skipped, and the next one gets a fresh minute.
+
+### What it does not cover
+A skipped product reaches no output topic until task 13 sends it to review (trade-off "Failed classification"). A failure of PostgreSQL or of the send is not retried (trade-off "Database and send without retry").
