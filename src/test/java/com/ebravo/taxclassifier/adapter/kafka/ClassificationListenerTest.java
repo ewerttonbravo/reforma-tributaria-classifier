@@ -6,6 +6,8 @@ import static org.awaitility.Awaitility.await;
 import com.ebravo.taxclassifier.application.AiAdvisor;
 import com.ebravo.taxclassifier.application.AiFailure;
 import com.ebravo.taxclassifier.application.AiFailure.Kind;
+import com.ebravo.taxclassifier.application.AiUnavailable;
+import com.ebravo.taxclassifier.application.CalculatorUnavailable;
 import com.ebravo.taxclassifier.application.OfficialCandidates;
 import com.ebravo.taxclassifier.application.OfficialLegalBasis;
 import com.ebravo.taxclassifier.application.ProductPublisher;
@@ -19,6 +21,7 @@ import com.ebravo.taxclassifier.domain.TaxCalculation.InputInconsistency;
 import com.ebravo.taxclassifier.domain.TaxClassification;
 import com.ebravo.taxclassifier.domain.TaxSituation;
 import java.math.BigDecimal;
+import java.net.ConnectException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -57,8 +60,13 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.kafka.KafkaContainer;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
-// The threshold is above the default, so a review at 0.85 proves it is read from configuration.
-@SpringBootTest(properties = "classification.confidence-threshold=0.90")
+// The threshold is above the default, so a review at 0.85 proves it is read from configuration. The retries keep their configured
+// count, with short waits.
+@SpringBootTest(properties = {
+    "classification.confidence-threshold=0.90",
+    "classification.retry.initial-interval=10ms",
+    "classification.retry.max-interval=10ms"
+})
 @Testcontainers
 class ClassificationListenerTest {
 
@@ -77,24 +85,32 @@ class ClassificationListenerTest {
             new TaxSituation("220", "Alíquota fixa", List.of(
                     new TaxClassification("220001", "Incorporação imobiliária submetida ao regime especial de tributação"))));
     private static final LegalBasis BASIS_OF_200003 = new LegalBasis("Art. 125", "Art. 125. Ficam reduzidas a zero", "LC 214/2025");
+    private static final Suggestion RICE = new Suggestion("200", "200003", new BigDecimal("0.95"), "Arroz integra a cesta básica.");
     /** The fake AI's answer, by product code. */
-    private static final Map<String, Suggestion> ANSWERS = Map.of(
-            "P001", new Suggestion("200", "200003", new BigDecimal("0.95"), "Arroz integra a cesta básica."),
-            "P002", new Suggestion("200", "200003", new BigDecimal("0.85"), "Feijão parece integrar a cesta básica."),
-            "P004", new Suggestion("200", "200003", new BigDecimal("0.95"), "Arroz integra a cesta básica."),
-            "P005", new Suggestion("220", "220001", new BigDecimal("0.95"), "Incorporação imobiliária em regime especial."),
-            "P007", new Suggestion("200", "200003", new BigDecimal("0.95"), "Arroz integra a cesta básica."),
-            "P008", new Suggestion("200", "200035", new BigDecimal("0.95"), "Arroz parece ter alíquota reduzida."),
-            "P009", new Suggestion("200", "200003", new BigDecimal("0.95"), "Arroz integra a cesta básica."),
-            "P010", new Suggestion("200", "200003", new BigDecimal("0.95"), "Arroz integra a cesta básica."),
-            "P011", new Suggestion("200", "200003", new BigDecimal("0.95"), "Arroz integra a cesta básica."));
+    private static final Map<String, Suggestion> ANSWERS = Map.ofEntries(
+            Map.entry("P001", RICE),
+            Map.entry("P002", new Suggestion("200", "200003", new BigDecimal("0.85"), "Feijão parece integrar a cesta básica.")),
+            Map.entry("P004", RICE),
+            Map.entry("P005", new Suggestion("220", "220001", new BigDecimal("0.95"), "Incorporação imobiliária em regime especial.")),
+            Map.entry("P007", RICE),
+            Map.entry("P008", new Suggestion("200", "200035", new BigDecimal("0.95"), "Arroz parece ter alíquota reduzida.")),
+            Map.entry("P009", RICE),
+            Map.entry("P010", RICE),
+            Map.entry("P011", RICE),
+            Map.entry("P012", RICE),
+            Map.entry("P013", RICE),
+            Map.entry("P014", RICE),
+            Map.entry("P015", RICE),
+            Map.entry("P017", RICE));
     /** REG-011 as release 1.6.1 answered it for P001 under 200035. */
     private static final CalculationError NOT_LINKED = new CalculationError("REG-011",
             "NCM de código 10063021 não vinculada à Classificação Tributária de código 200035 (CBS e IBS)");
-    /** The codes the fake AI was asked about; a code without an answer makes it fail. */
+    /** The codes the fake AI was asked about; P015 and P016 find it unavailable the first time, and a code without an answer makes it fail. */
     private static final List<String> ADVISED = new CopyOnWriteArrayList<>();
     /** Whether the service already died once while calculating P009, after the AI answered and before publishing. */
     private static final AtomicBoolean DIED = new AtomicBoolean();
+    /** The codes the fake calculator was asked to calculate. */
+    private static final List<String> CALCULATED = new CopyOnWriteArrayList<>();
 
     @Autowired
     ProductPublisher publisher;
@@ -160,7 +176,7 @@ class ClassificationListenerTest {
     }
 
     @Test
-    void failedClassificationIsTriedOnceAndSkipped() {
+    void permanentFailureIsTriedOnceAndSkipped() {
         // One partition, so P004 is classified only after the listener is done with P003.
         kafka.send(KafkaProductPublisher.TOPIC, 0, "P003", new ProductMessage("P003", "Produto sem resposta", "10063021", "1.00"));
         kafka.send(KafkaProductPublisher.TOPIC, 0, "P004", new ProductMessage("P004", "Arroz parboilizado 1kg", "10063021", "6.50"))
@@ -211,6 +227,48 @@ class ClassificationListenerTest {
         // One partition per key, so the new price is classified after both copies, and calculated on its own price.
         assertThat(recordWithKey("produtos-classificados", "P011", value -> value.contains("\"base\":\"4.00\""))).isNotNull();
         assertThat(ADVISED).filteredOn("P011"::equals).hasSize(1);
+    }
+
+    @Test
+    void unavailableCalculatorIsRetriedUntilItComesBack() {
+        kafka.send(KafkaProductPublisher.TOPIC, 2, "P012", new ProductMessage("P012", "Arroz cateto 1kg", "10063021", "8.10"))
+                .join();
+
+        assertThat(recordWithKey("produtos-classificados", "P012")).isNotNull();
+        assertThat(CALCULATED).filteredOn("P012"::equals).hasSize(3);
+        // The suggestion was saved before the calculation failed, so the retries do not pay for the AI again.
+        assertThat(ADVISED).filteredOn("P012"::equals).hasSize(1);
+    }
+
+    @Test
+    void retryGivesUpAfterTheConfiguredRetries() {
+        // One partition, so P014 is classified only after the listener gives up on P013.
+        kafka.send(KafkaProductPublisher.TOPIC, 1, "P013", new ProductMessage("P013", "Arroz vermelho 1kg", "10063021", "11.00"));
+        kafka.send(KafkaProductPublisher.TOPIC, 1, "P014", new ProductMessage("P014", "Arroz negro 1kg", "10063021", "13.00"))
+                .join();
+
+        assertThat(recordWithKey("produtos-classificados", "P014")).isNotNull();
+        assertThat(CALCULATED).filteredOn("P013"::equals).hasSize(7);
+    }
+
+    @Test
+    void unavailableAiIsRetried() {
+        kafka.send(KafkaProductPublisher.TOPIC, 2, "P015", new ProductMessage("P015", "Arroz japonês 1kg", "10063021", "15.00"))
+                .join();
+
+        assertThat(recordWithKey("produtos-classificados", "P015")).isNotNull();
+        assertThat(ADVISED).filteredOn("P015"::equals).hasSize(2);
+    }
+
+    @Test
+    void retryStopsWhenTheFailureBecomesPermanent() {
+        // P016 finds the AI unavailable, then refused; one partition, so P017 is classified only after P016 is given up.
+        kafka.send(KafkaProductPublisher.TOPIC, 0, "P016", new ProductMessage("P016", "Produto recusado", "10063021", "1.00"));
+        kafka.send(KafkaProductPublisher.TOPIC, 0, "P017", new ProductMessage("P017", "Arroz jasmim 1kg", "10063021", "14.00"))
+                .join();
+
+        assertThat(recordWithKey("produtos-classificados", "P017")).isNotNull();
+        assertThat(ADVISED).filteredOn("P016"::equals).hasSize(2);
     }
 
     @Test
@@ -285,6 +343,10 @@ class ClassificationListenerTest {
         AiAdvisor fakeAdvisor() {
             return (product, official) -> {
                 ADVISED.add(product.code());
+                var asked = ADVISED.stream().filter(product.code()::equals).count();
+                if ((product.code().equals("P015") || product.code().equals("P016")) && asked == 1) {
+                    throw new AiUnavailable("the AI did not answer", null);
+                }
                 var answer = ANSWERS.get(product.code());
                 if (answer == null) {
                     throw new AiFailure(Kind.REFUSED, "the AI refused", null);
@@ -294,15 +356,21 @@ class ClassificationListenerTest {
         }
 
         /**
-         * Dies the first time it calculates P009; REG-011 for 200035; otherwise the amounts of the recorded calculation of P001 in 2026, on each product's price as the
-         * base, simulated for P005 only, so the flag is proven to reach the topic both ways.
+         * Dies the first time it calculates P009; is unavailable the first 2 times it calculates P012 and every time for P013; REG-011
+         * for 200035; otherwise the amounts of the recorded calculation of P001 in 2026, on each product's price as the base,
+         * simulated for P005 only, so the flag is proven to reach the topic both ways.
          */
         @Bean
         @Primary
         TaxCalculator fakeCalculator() {
             return (product, suggestion, taxableEvent) -> {
+                CALCULATED.add(product.code());
                 if (product.code().equals("P009") && DIED.compareAndSet(false, true)) {
                     throw new ServiceDied();
+                }
+                var attempts = CALCULATED.stream().filter(product.code()::equals).count();
+                if (product.code().equals("P012") && attempts <= 2 || product.code().equals("P013")) {
+                    throw new CalculatorUnavailable(new ConnectException("Connection refused"));
                 }
                 return suggestion.cClassTrib().equals("200035")
                         ? new InputInconsistency(List.of(NOT_LINKED))

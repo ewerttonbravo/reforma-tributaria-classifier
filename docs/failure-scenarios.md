@@ -64,3 +64,33 @@ Once `LAG` is 0, the query of step 3 shows 10 rows with a newer `max(created_at)
 
 ### What it does not cover
 Two instances classifying the same product at once both pay for the AI, and both publish the first answer saved (D21, D22; task 15 runs two instances). A description saved once precomposed and once decomposed is two products to the store (D21).
+
+## Calculator down and back (task 12b)
+
+A calculator that does not answer, refuses the connection or answers 5xx fails as `CalculatorUnavailable` (D23), and the listener retries the product in place, with waits of 1, 2, 4, 8, 16 and 30 s (D24). The products behind it on the consumer's partitions wait too, so their order holds. A calculator back within that minute classifies the product, and the AI is not paid again, since its suggestion was saved before the calculation (D22).
+
+### Reproduce
+The calculator is stopped once the official lists are read, so the products reach the AI and fail at the calculation, after their suggestions are saved.
+
+0. Start from an empty broker and database: `docker compose down && docker compose up -d`, with the calculator running.
+1. Start the service with a Claude API key: `java -jar target/tax-classifier.jar`.
+2. Publish one product and wait for it on `produtos-classificados`: the service has read and cached the day's official lists (D16).
+   ```sh
+   printf 'code;description;ncm;price\nP100;Arroz tipo 1 5kg;10063021;25.90\n' > /tmp/one.csv
+   java -jar target/tax-classifier.jar publish /tmp/one.csv
+   ```
+3. Stop the calculator (Ctrl-C in its terminal) and publish the sample: `java -jar target/tax-classifier.jar publish samples/products.csv`. Each product is sent to the AI, its suggestion saved, and its calculation fails and is retried; the log shows `Record in retry and not yet recovered` at each attempt.
+4. Within 20 s, start the calculator again (see the README); it took 19 to 26 s to start. Once it answers, the waiting products are classified.
+5. Once `LAG` is 0 (step 4 of the first section), every product of the sample is on `produtos-classificados` or `produtos-revisao`, and the count of saved suggestions (step 3 of the previous section) is 11, P100 and the sample's 10: the retries did not pay for the AI again. Run by hand: the calculator answered 26 s after it was started, and the 12 results, 9 classified and 3 for review, were all out 56 s after that, the remaining products still waiting on the AI.
+
+### Break it
+Turn the retries off and repeat with the calculator stopped:
+
+```sh
+java -jar target/tax-classifier.jar --classification.retry.max-retries=0
+```
+
+Each product is tried once and skipped, logged at ERROR as `Backoff none exhausted` with the `CalculatorUnavailable` that caused it: none reaches an output topic, and `LAG` still drops to 0, since a skipped record's offset is committed. The same happens with the retries on when the calculator stays down for more than a minute: run by hand, a product was tried 7 times, 1, 2, 4, 8, 16 and 30 s apart, then logged as `Backoff ExponentialBackOffExecution[currentInterval=30000ms, multiplier=2.0, attempts=6] exhausted` 61 s after its first failure, and skipped; the next one gets a fresh minute.
+
+### What it does not cover
+A skipped product reaches no output topic until task 13 sends it to review (trade-off "Failed classification"). A failure of PostgreSQL or of the send is not retried (trade-off "Database and send without retry").
