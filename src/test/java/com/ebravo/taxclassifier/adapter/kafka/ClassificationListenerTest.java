@@ -158,7 +158,7 @@ class ClassificationListenerTest {
                 """
                 {"product":{"code":"P002","description":"Feijão carioca 1kg","ncm":"07133319","price":"8.49"},
                  "suggestion":{"cst":"200","cClassTrib":"200003","confidence":"0.85","justification":"Feijão parece integrar a cesta básica."},
-                 "reason":"LOW_CONFIDENCE","errors":[]}""",
+                 "reason":"LOW_CONFIDENCE","errors":[],"cause":null}""",
                 recordWithKey("produtos-revisao", "P002").value(), JSONCompareMode.STRICT);
     }
 
@@ -171,17 +171,22 @@ class ClassificationListenerTest {
                 {"product":{"code":"P008","description":"Arroz tipo 1 5kg","ncm":"10063021","price":"25.90"},
                  "suggestion":{"cst":"200","cClassTrib":"200035","confidence":"0.95","justification":"Arroz parece ter alíquota reduzida."},
                  "reason":"INPUT_INCONSISTENCY",
-                 "errors":[{"code":"REG-011","detail":"%s"}]}""".formatted(NOT_LINKED.detail()),
+                 "errors":[{"code":"REG-011","detail":"%s"}],"cause":null}""".formatted(NOT_LINKED.detail()),
                 recordWithKey("produtos-revisao", "P008").value(), JSONCompareMode.STRICT);
     }
 
     @Test
-    void permanentFailureIsTriedOnceAndSkipped() {
+    void permanentFailureGoesToReviewWithItsCause() throws Exception {
         // One partition, so P004 is classified only after the listener is done with P003.
         kafka.send(KafkaProductPublisher.TOPIC, 0, "P003", new ProductMessage("P003", "Produto sem resposta", "10063021", "1.00"));
         kafka.send(KafkaProductPublisher.TOPIC, 0, "P004", new ProductMessage("P004", "Arroz parboilizado 1kg", "10063021", "6.50"))
                 .join();
 
+        JSONAssert.assertEquals(
+                """
+                {"product":{"code":"P003","description":"Produto sem resposta","ncm":"10063021","price":"1.00"},
+                 "suggestion":null,"reason":"FAILED","errors":[],"cause":"the AI refused"}""",
+                recordWithKey("produtos-revisao", "P003").value(), JSONCompareMode.STRICT);
         assertThat(recordWithKey("produtos-classificados", "P004")).isNotNull();
         assertThat(ADVISED).filteredOn("P003"::equals).hasSize(1);
     }
@@ -241,12 +246,18 @@ class ClassificationListenerTest {
     }
 
     @Test
-    void retryGivesUpAfterTheConfiguredRetries() {
+    void exhaustedRetryGoesToReview() throws Exception {
         // One partition, so P014 is classified only after the listener gives up on P013.
         kafka.send(KafkaProductPublisher.TOPIC, 1, "P013", new ProductMessage("P013", "Arroz vermelho 1kg", "10063021", "11.00"));
         kafka.send(KafkaProductPublisher.TOPIC, 1, "P014", new ProductMessage("P014", "Arroz negro 1kg", "10063021", "13.00"))
                 .join();
 
+        JSONAssert.assertEquals(
+                """
+                {"product":{"code":"P013","description":"Arroz vermelho 1kg","ncm":"10063021","price":"11.00"},
+                 "suggestion":null,"reason":"FAILED","errors":[],
+                 "cause":"the calculator is unavailable: Connection refused"}""",
+                recordWithKey("produtos-revisao", "P013").value(), JSONCompareMode.STRICT);
         assertThat(recordWithKey("produtos-classificados", "P014")).isNotNull();
         assertThat(CALCULATED).filteredOn("P013"::equals).hasSize(7);
     }
