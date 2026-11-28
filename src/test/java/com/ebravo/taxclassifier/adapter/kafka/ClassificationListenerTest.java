@@ -6,6 +6,7 @@ import static org.awaitility.Awaitility.await;
 import com.ebravo.taxclassifier.application.AiAdvisor;
 import com.ebravo.taxclassifier.application.AiFailure;
 import com.ebravo.taxclassifier.application.AiFailure.Kind;
+import com.ebravo.taxclassifier.application.AiUnavailable;
 import com.ebravo.taxclassifier.application.CalculatorUnavailable;
 import com.ebravo.taxclassifier.application.OfficialCandidates;
 import com.ebravo.taxclassifier.application.OfficialLegalBasis;
@@ -98,11 +99,13 @@ class ClassificationListenerTest {
             Map.entry("P011", RICE),
             Map.entry("P012", RICE),
             Map.entry("P013", RICE),
-            Map.entry("P014", RICE));
+            Map.entry("P014", RICE),
+            Map.entry("P015", RICE),
+            Map.entry("P017", RICE));
     /** REG-011 as release 1.6.1 answered it for P001 under 200035. */
     private static final CalculationError NOT_LINKED = new CalculationError("REG-011",
             "NCM de código 10063021 não vinculada à Classificação Tributária de código 200035 (CBS e IBS)");
-    /** The codes the fake AI was asked about; a code without an answer makes it fail. */
+    /** The codes the fake AI was asked about; P015 and P016 find it unavailable the first time, and a code without an answer makes it fail. */
     private static final List<String> ADVISED = new CopyOnWriteArrayList<>();
     /** Whether the service already died once while calculating P009, after the AI answered and before publishing. */
     private static final AtomicBoolean DIED = new AtomicBoolean();
@@ -249,6 +252,26 @@ class ClassificationListenerTest {
     }
 
     @Test
+    void unavailableAiIsRetried() {
+        kafka.send(KafkaProductPublisher.TOPIC, 2, "P015", new ProductMessage("P015", "Arroz japonês 1kg", "10063021", "15.00"))
+                .join();
+
+        assertThat(recordWithKey("produtos-classificados", "P015")).isNotNull();
+        assertThat(ADVISED).filteredOn("P015"::equals).hasSize(2);
+    }
+
+    @Test
+    void retryStopsWhenTheFailureBecomesPermanent() {
+        // P016 finds the AI unavailable, then refused; one partition, so P017 is classified only after P016 is given up.
+        kafka.send(KafkaProductPublisher.TOPIC, 0, "P016", new ProductMessage("P016", "Produto recusado", "10063021", "1.00"));
+        kafka.send(KafkaProductPublisher.TOPIC, 0, "P017", new ProductMessage("P017", "Arroz jasmim 1kg", "10063021", "14.00"))
+                .join();
+
+        assertThat(recordWithKey("produtos-classificados", "P017")).isNotNull();
+        assertThat(ADVISED).filteredOn("P016"::equals).hasSize(2);
+    }
+
+    @Test
     void offsetMovesPastAPublishedProduct() throws Exception {
         var sent = kafka.send(KafkaProductPublisher.TOPIC, 0, "P010", new ProductMessage("P010", "Arroz arbóreo 1kg", "10063021", "12.40"))
                 .join();
@@ -320,6 +343,10 @@ class ClassificationListenerTest {
         AiAdvisor fakeAdvisor() {
             return (product, official) -> {
                 ADVISED.add(product.code());
+                var asked = ADVISED.stream().filter(product.code()::equals).count();
+                if ((product.code().equals("P015") || product.code().equals("P016")) && asked == 1) {
+                    throw new AiUnavailable("the AI did not answer", null);
+                }
                 var answer = ANSWERS.get(product.code());
                 if (answer == null) {
                     throw new AiFailure(Kind.REFUSED, "the AI refused", null);

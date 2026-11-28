@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 
 import com.ebravo.taxclassifier.application.AiFailure;
 import com.ebravo.taxclassifier.application.AiFailure.Kind;
+import com.ebravo.taxclassifier.application.AiUnavailable;
 import com.ebravo.taxclassifier.domain.Product;
 import com.ebravo.taxclassifier.domain.Suggestion;
 import com.ebravo.taxclassifier.domain.TaxClassification;
@@ -185,38 +186,50 @@ class ClaudeAiAdvisorTest {
         assertThat(failure().kind()).isEqualTo(Kind.MALFORMED);
     }
 
-    @Test
-    void httpErrorIsAFailureSentOnce() {
-        status = 429;
-        response = """
-                {"type":"error","error":{"type":"rate_limit_error","message":"Number of request tokens has exceeded your per-minute rate limit"},"request_id":"req_hand_written"}
-                """.getBytes(StandardCharsets.UTF_8);
+    @ParameterizedTest
+    @ValueSource(ints = {400, 401})
+    void clientErrorIsAFailureSentOnce(int clientError) {
+        status = clientError;
+        response = errorBody("invalid_request_error");
 
         var failure = failure();
 
         assertThat(failure.kind()).isEqualTo(Kind.HTTP_ERROR);
-        assertThat(failure.status()).hasValue(429);
+        assertThat(failure.status()).hasValue(clientError);
+        assertThat(requests).hasValue(1);
+    }
+
+    /** 529 is the API's overloaded error. */
+    @ParameterizedTest
+    @ValueSource(ints = {429, 500, 529})
+    void rateLimitOrServerErrorIsUnavailableSentOnce(int unavailable) {
+        status = unavailable;
+        response = errorBody("api_error");
+
+        assertThatThrownBy(() -> advisor.suggest(BEANS, OFFICIAL))
+                .isInstanceOf(AiUnavailable.class)
+                .hasMessage("the AI answered with HTTP " + unavailable);
         assertThat(requests).hasValue(1);
     }
 
     /** Fails instead of hanging when the timeout is not applied. */
     @Test
-    void aiThatDoesNotAnswerIsAFailureSentOnce() {
+    void aiThatDoesNotAnswerIsUnavailableSentOnce() {
         held = true;
 
         try (var impatient = new ClaudeAiAdvisor(stubUrl(), "test-key", Duration.ofMillis(200))) {
             assertTimeoutPreemptively(Duration.ofSeconds(5), () -> assertThatThrownBy(() -> impatient.suggest(BEANS, OFFICIAL))
-                    .isInstanceOfSatisfying(AiFailure.class, failure -> assertThat(failure.kind()).isEqualTo(Kind.NO_ANSWER)));
+                    .isInstanceOf(AiUnavailable.class).hasMessage("the AI did not answer"));
         }
         assertThat(requests).hasValue(1);
     }
 
     // Port 1 is reserved and has no listener on a developer's machine or a CI runner, so the connection is refused.
     @Test
-    void aiThatRefusesTheConnectionIsAFailure() {
+    void aiThatRefusesTheConnectionIsUnavailable() {
         try (var unreachable = new ClaudeAiAdvisor("http://localhost:1", "test-key", TIMEOUT)) {
             assertThatThrownBy(() -> unreachable.suggest(BEANS, OFFICIAL))
-                    .isInstanceOfSatisfying(AiFailure.class, failure -> assertThat(failure.kind()).isEqualTo(Kind.NO_ANSWER));
+                    .isInstanceOf(AiUnavailable.class).hasMessage("the AI did not answer");
         }
     }
 
@@ -232,6 +245,12 @@ class ClaudeAiAdvisorTest {
         var message = (ObjectNode) JsonMapper.shared().readTree(recorded("messages-structured-response.json"));
         message.put("stop_reason", stopReason);
         response = JsonMapper.shared().writeValueAsBytes(message);
+    }
+
+    private static byte[] errorBody(String type) {
+        return """
+                {"type":"error","error":{"type":"%s","message":"hand written"},"request_id":"req_hand_written"}
+                """.formatted(type).getBytes(StandardCharsets.UTF_8);
     }
 
     private String stubUrl() {
