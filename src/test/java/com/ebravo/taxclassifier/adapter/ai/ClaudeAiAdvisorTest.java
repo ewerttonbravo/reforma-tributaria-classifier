@@ -28,6 +28,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
@@ -199,12 +200,15 @@ class ClaudeAiAdvisorTest {
         assertThat(requests).hasValue(1);
     }
 
-    /** 529 is the API's overloaded error. */
+    /**
+     * The statuses the SDK itself would retry, with the error type the API answers for each; 408 and 409 are not in the API's
+     * documented errors, so they carry the generic one. 529 is the API's overloaded error.
+     */
     @ParameterizedTest
-    @ValueSource(ints = {429, 500, 529})
-    void rateLimitOrServerErrorIsUnavailableSentOnce(int unavailable) {
+    @CsvSource({"408,api_error", "409,api_error", "429,rate_limit_error", "500,api_error", "529,overloaded_error"})
+    void transientErrorIsUnavailableSentOnce(int unavailable, String type) {
         status = unavailable;
-        response = errorBody("api_error");
+        response = errorBody(type);
 
         assertThatThrownBy(() -> advisor.suggest(BEANS, OFFICIAL))
                 .isInstanceOf(AiUnavailable.class)
