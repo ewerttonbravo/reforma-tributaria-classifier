@@ -192,7 +192,7 @@ class ClassificationListenerTest {
     }
 
     @Test
-    void malformedRecordIsSkipped() throws Exception {
+    void malformedRecordGoesToReviewWithNoProduct() throws Exception {
         // Not a product's JSON, so it fails while the consumer polls, before the listener sees it.
         var config = Map.<String, Object>of(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, KAFKA.getBootstrapServers());
         try (var producer = new KafkaProducer<>(config, new StringSerializer(), new StringSerializer())) {
@@ -201,7 +201,23 @@ class ClassificationListenerTest {
         kafka.send(KafkaProductPublisher.TOPIC, 1, "P007", new ProductMessage("P007", "Arroz integral 1kg", "10063021", "9.90"))
                 .join();
 
+        JSONAssert.assertEquals(
+                """
+                {"product":null,"suggestion":null,"reason":"FAILED","errors":[],"cause":"failed to deserialize"}""",
+                recordWithKey("produtos-revisao", "P006").value(), JSONCompareMode.STRICT);
         assertThat(recordWithKey("produtos-classificados", "P007")).isNotNull();
+    }
+
+    @Test
+    void productWithoutNcmGoesToReview() throws Exception {
+        kafka.send(KafkaProductPublisher.TOPIC, 1, "P018", new ProductMessage("P018", "Arroz sem NCM", null, "5.00")).join();
+
+        JSONAssert.assertEquals(
+                """
+                {"product":{"code":"P018","description":"Arroz sem NCM","ncm":null,"price":"5.00"},
+                 "suggestion":null,"reason":"FAILED","errors":[],"cause":"the product has no ncm"}""",
+                recordWithKey("produtos-revisao", "P018").value(), JSONCompareMode.STRICT);
+        assertThat(ADVISED).doesNotContain("P018");
     }
 
     @Test
