@@ -1,8 +1,8 @@
 package com.ebravo.taxclassifier.application;
 
 /**
- * The AI did not answer, was rate limited or answered with a server error: asking again later may succeed. A type apart from
- * {@link AiFailure}, not a kind of it, so a retry can tell the two apart by class.
+ * The AI did not answer, or answered 408, 409, 429 or 5xx: asking again later may succeed. A type apart from {@link AiFailure},
+ * not a kind of it, so a retry can tell the two apart by class.
  */
 public final class AiUnavailable extends RuntimeException {
 

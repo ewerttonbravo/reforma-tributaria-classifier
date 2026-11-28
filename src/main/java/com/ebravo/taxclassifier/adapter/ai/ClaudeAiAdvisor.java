@@ -24,6 +24,7 @@ import java.math.BigDecimal;
 import java.time.Duration;
 import java.util.List;
 import java.util.NoSuchElementException;
+import java.util.Set;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.json.JsonMapper;
@@ -34,6 +35,8 @@ class ClaudeAiAdvisor implements AiAdvisor, AutoCloseable {
     private static final String MODEL = "claude-haiku-5-5";
     // Adaptive thinking spends from the same budget as the answer, so a tight cap would cut the JSON short.
     private static final long MAX_TOKENS = 16000;
+    /** Below 500, the statuses that may pass if asked again: request timeout, conflict, rate limit. */
+    private static final Set<Integer> TRANSIENT_STATUSES = Set.of(408, 409, 429);
     private static final String INSTRUCTIONS = """
             You classify products for the Brazilian tax reform (CBS and IBS, LC 214/2025).
             Choose exactly one CST and one cClassTrib listed under that CST from the official list below.
@@ -77,7 +80,8 @@ class ClaudeAiAdvisor implements AiAdvisor, AutoCloseable {
         try {
             return claude.messages().create(request);
         } catch (AnthropicServiceException e) {
-            if (e.statusCode() == 429 || e.statusCode() >= 500) {
+            // The statuses the SDK's own retry, turned off (D11), would retry.
+            if (TRANSIENT_STATUSES.contains(e.statusCode()) || e.statusCode() >= 500) {
                 throw new AiUnavailable("the AI answered with HTTP " + e.statusCode(), e);
             }
             throw new AiFailure(e.statusCode(), e);
