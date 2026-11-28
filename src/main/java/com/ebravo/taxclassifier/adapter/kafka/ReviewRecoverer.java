@@ -3,6 +3,7 @@ package com.ebravo.taxclassifier.adapter.kafka;
 import com.ebravo.taxclassifier.adapter.kafka.ClassificationListener.ReviewMessage;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.springframework.core.log.LogAccessor;
@@ -36,7 +37,9 @@ final class ReviewRecoverer implements ConsumerRecordRecoverer {
         var position = KafkaUtils.format(record);
         LOG.error(exception, () -> "Sending to review after its classification failed: " + position);
         var product = record.value() instanceof ProductMessage message ? message : null;
-        var cause = ErrorHandlingUtils.findRootCause(exception).getMessage();
+        var failure = ErrorHandlingUtils.findRootCause(exception);
+        // Null only for a review the classification decided, so a failure with no message is named by its type.
+        var cause = Objects.requireNonNullElse(failure.getMessage(), failure.getClass().getName());
         try {
             kafka.send(ClassificationListener.REVIEW_TOPIC, (String) record.key(),
                     new ReviewMessage(product, null, FAILED, List.of(), cause)).join();
