@@ -52,7 +52,7 @@ calculator:
     ibs-municipal: 0.05
 classification:
   confidence-threshold: 0.80
-  # Waits of 1, 2, 4, 8, 16 and 30 s (61 s in all), past the 19 to 23 s the calculator was measured to take to start.
+  # Waits of 1, 2, 4, 8, 16 and 30 s (61 s in all), past the 19 to 26 s the calculator was measured to take to start.
   retry:
     initial-interval: 1s
     multiplier: 2

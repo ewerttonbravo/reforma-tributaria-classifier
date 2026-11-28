@@ -79,9 +79,9 @@ The calculator is stopped once the official lists are read, so the products reac
    printf 'code;description;ncm;price\nP100;Arroz tipo 1 5kg;10063021;25.90\n' > /tmp/one.csv
    java -jar target/tax-classifier.jar publish /tmp/one.csv
    ```
-3. Stop the calculator (Ctrl-C in its terminal) and publish the sample: `java -jar target/tax-classifier.jar publish samples/products.csv`. Each product is sent to the AI, its suggestion saved, and its calculation fails and is retried; the log shows the failed attempts.
-4. Within 20 s, start the calculator again (see the README); it takes 19 to 23 s to start. Once it answers, the waiting products are classified.
-5. Once `LAG` is 0 (step 4 of the first section), every product of the sample is on `produtos-classificados` or `produtos-revisao`, and the count of saved suggestions (step 3 of the previous section) is 11, P100 and the sample's 10: the retries did not pay for the AI again.
+3. Stop the calculator (Ctrl-C in its terminal) and publish the sample: `java -jar target/tax-classifier.jar publish samples/products.csv`. Each product is sent to the AI, its suggestion saved, and its calculation fails and is retried; the log shows `Record in retry and not yet recovered` at each attempt.
+4. Within 20 s, start the calculator again (see the README); it took 19 to 26 s to start. Once it answers, the waiting products are classified.
+5. Once `LAG` is 0 (step 4 of the first section), every product of the sample is on `produtos-classificados` or `produtos-revisao`, and the count of saved suggestions (step 3 of the previous section) is 11, P100 and the sample's 10: the retries did not pay for the AI again. Run by hand: the calculator answered 26 s after it was started, and the 12 results, 9 classified and 3 for review, were all out 56 s after that, the remaining products still waiting on the AI.
 
 ### Break it
 Turn the retries off and repeat with the calculator stopped:
@@ -90,7 +90,7 @@ Turn the retries off and repeat with the calculator stopped:
 java -jar target/tax-classifier.jar --classification.retry.max-retries=0
 ```
 
-Each product is tried once and skipped: none reaches an output topic, and `LAG` still drops to 0, since a skipped record's offset is committed. The same happens with the retries on when the calculator stays down for more than a minute: the product being retried is skipped, and the next one gets a fresh minute.
+Each product is tried once and skipped, logged at ERROR as `Backoff none exhausted` with the `CalculatorUnavailable` that caused it: none reaches an output topic, and `LAG` still drops to 0, since a skipped record's offset is committed. The same happens with the retries on when the calculator stays down for more than a minute: run by hand, a product was tried 7 times, 1, 2, 4, 8, 16 and 30 s apart, then logged as `Backoff ExponentialBackOffExecution[currentInterval=30000ms, multiplier=2.0, attempts=6] exhausted` 61 s after its first failure, and skipped; the next one gets a fresh minute.
 
 ### What it does not cover
 A skipped product reaches no output topic until task 13 sends it to review (trade-off "Failed classification"). A failure of PostgreSQL or of the send is not retried (trade-off "Database and send without retry").
