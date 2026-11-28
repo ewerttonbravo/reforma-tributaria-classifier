@@ -16,6 +16,7 @@ import com.anthropic.models.messages.TextBlockParam;
 import com.ebravo.taxclassifier.application.AiAdvisor;
 import com.ebravo.taxclassifier.application.AiFailure;
 import com.ebravo.taxclassifier.application.AiFailure.Kind;
+import com.ebravo.taxclassifier.application.AiUnavailable;
 import com.ebravo.taxclassifier.domain.Product;
 import com.ebravo.taxclassifier.domain.Suggestion;
 import com.ebravo.taxclassifier.domain.TaxSituation;
@@ -76,11 +77,14 @@ class ClaudeAiAdvisor implements AiAdvisor, AutoCloseable {
         try {
             return claude.messages().create(request);
         } catch (AnthropicServiceException e) {
+            if (e.statusCode() == 429 || e.statusCode() >= 500) {
+                throw new AiUnavailable("the AI answered with HTTP " + e.statusCode(), e);
+            }
             throw new AiFailure(e.statusCode(), e);
         } catch (AnthropicInvalidDataException e) {
             throw new AiFailure(Kind.MALFORMED, "the response is not a message", e);
         } catch (AnthropicIoException e) {
-            throw new AiFailure(Kind.NO_ANSWER, "the AI did not answer", e);
+            throw new AiUnavailable("the AI did not answer", e);
         }
     }
 

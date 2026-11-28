@@ -1,6 +1,7 @@
 package com.ebravo.taxclassifier.adapter.kafka;
 
 import com.ebravo.taxclassifier.application.AiAdvisor;
+import com.ebravo.taxclassifier.application.AiUnavailable;
 import com.ebravo.taxclassifier.application.CalculatorUnavailable;
 import com.ebravo.taxclassifier.application.ClassifyProduct;
 import com.ebravo.taxclassifier.application.OfficialCandidates;
@@ -29,7 +30,7 @@ class ClassificationConfiguration {
     }
 
     /**
-     * Retries only a calculator that may come back, blocking the partition so a product's updates keep their order; any other
+     * Retries only a calculator or an AI that may come back, blocking the partition so a product's updates keep their order; any other
      * failure is skipped at once. Spring Kafka picks the retry on a record's first failure and again only when the failure's
      * class changes, so a transient failure must be a type of its own.
      */
@@ -44,7 +45,7 @@ class ClassificationConfiguration {
         backOff.setMaxAttempts(maxRetries);
         var handler = new DefaultErrorHandler(backOff);
         handler.defaultFalse();
-        handler.addRetryableExceptions(CalculatorUnavailable.class);
+        handler.addRetryableExceptions(CalculatorUnavailable.class, AiUnavailable.class);
         return handler;
     }
 }
