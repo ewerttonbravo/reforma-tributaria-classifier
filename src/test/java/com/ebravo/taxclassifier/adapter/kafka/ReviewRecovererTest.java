@@ -1,8 +1,10 @@
 package com.ebravo.taxclassifier.adapter.kafka;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.ebravo.taxclassifier.adapter.kafka.ClassificationListener.ReviewMessage;
 import com.ebravo.taxclassifier.application.AiFailure;
 import com.ebravo.taxclassifier.application.AiFailure.Kind;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -44,5 +46,15 @@ class ReviewRecovererTest {
         producer.sendException = new KafkaException("the broker is down");
         assertThatThrownBy(() -> recoverer.accept(REFUSED_PRODUCT, REFUSAL)).isNotNull();
         assertThatThrownBy(() -> recoverer.accept(REFUSED_PRODUCT, REFUSAL)).isNotNull();
+    }
+
+    @Test
+    void failureWithNoMessageIsNamedByItsType() {
+        recoverer.accept(REFUSED_PRODUCT, new IllegalStateException());
+
+        // A null cause would read as a review the classification decided.
+        assertThat(producer.history()).singleElement()
+                .extracting(sent -> ((ReviewMessage) sent.value()).cause())
+                .isEqualTo("java.lang.IllegalStateException");
     }
 }
