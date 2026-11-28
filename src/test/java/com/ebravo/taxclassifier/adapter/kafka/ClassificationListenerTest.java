@@ -31,6 +31,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Predicate;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
@@ -112,6 +113,8 @@ class ClassificationListenerTest {
     private static final List<String> ADVISED = new CopyOnWriteArrayList<>();
     /** Whether the service already died once while calculating P009, after the AI answered and before publishing. */
     private static final AtomicBoolean DIED = new AtomicBoolean();
+    /** How many times the fake calculator was unavailable to P019 at 1.00, counted apart from its update at 2.00. */
+    private static final AtomicInteger FIRST_UPDATE_FAILURES = new AtomicInteger();
     /** The codes the fake calculator was asked to calculate. */
     private static final List<String> CALCULATED = new CopyOnWriteArrayList<>();
 
@@ -429,7 +432,8 @@ class ClassificationListenerTest {
                 }
                 var attempts = CALCULATED.stream().filter(product.code()::equals).count();
                 if (product.code().equals("P012") && attempts <= 2 || product.code().equals("P013")
-                        || product.code().equals("P019") && product.price().equals(new BigDecimal("1.00")) && attempts <= 2) {
+                        || product.code().equals("P019") && product.price().equals(new BigDecimal("1.00"))
+                                && FIRST_UPDATE_FAILURES.getAndIncrement() < 2) {
                     throw new CalculatorUnavailable(new ConnectException("Connection refused"));
                 }
                 return suggestion.cClassTrib().equals("200035")
