@@ -7,7 +7,6 @@ import com.ebravo.taxclassifier.domain.Classification.Classified;
 import com.ebravo.taxclassifier.domain.Classification.ToReview;
 import com.ebravo.taxclassifier.domain.LegalBasis;
 import com.ebravo.taxclassifier.domain.Product;
-import com.ebravo.taxclassifier.domain.ReviewReason;
 import com.ebravo.taxclassifier.domain.Suggestion;
 import com.ebravo.taxclassifier.domain.TaxCalculation.Calculated;
 import java.util.List;
@@ -39,8 +38,8 @@ class ClassificationListener {
                     new ClassifiedMessage(message, SuggestionMessage.of(suggestion), legalBasis.orElse(null),
                             CalculationMessage.of(calculation)));
             case ToReview(var suggestion, var reason, var errors) -> send(REVIEW_TOPIC, product,
-                    new ReviewMessage(message, SuggestionMessage.of(suggestion), reason,
-                            errors.stream().map(ErrorMessage::of).toList()));
+                    new ReviewMessage(message, SuggestionMessage.of(suggestion), reason.name(),
+                            errors.stream().map(ErrorMessage::of).toList(), null));
         }
     }
 
@@ -76,6 +75,7 @@ class ClassificationListener {
         }
     }
 
+    /** The cause is a failure's, null when the classification sent the product to review. */
     record ReviewMessage(
-            ProductMessage product, SuggestionMessage suggestion, ReviewReason reason, List<ErrorMessage> errors) {}
+            ProductMessage product, SuggestionMessage suggestion, String reason, List<ErrorMessage> errors, String cause) {}
 }

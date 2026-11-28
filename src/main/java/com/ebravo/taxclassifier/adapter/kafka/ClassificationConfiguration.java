@@ -15,6 +15,7 @@ import java.time.Duration;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.listener.DefaultErrorHandler;
 import org.springframework.util.backoff.ExponentialBackOff;
 
@@ -31,19 +32,21 @@ class ClassificationConfiguration {
 
     /**
      * Retries only a calculator or an AI that may come back, blocking the partition so a product's updates keep their order; any other
-     * failure is skipped at once. Spring Kafka picks the retry on a record's first failure and again only when the failure's
-     * class changes, so a transient failure must be a type of its own.
+     * failure is not retried, and a record that fails for good goes to review. Spring Kafka picks the retry on a record's first
+     * failure and again only when the failure's class changes, so a transient failure must be a type of its own.
      */
     @Bean
     DefaultErrorHandler errorHandler(
             @Value("${classification.retry.initial-interval}") Duration initialInterval,
             @Value("${classification.retry.multiplier}") double multiplier,
             @Value("${classification.retry.max-interval}") Duration maxInterval,
-            @Value("${classification.retry.max-retries}") int maxRetries) {
+            @Value("${classification.retry.max-retries}") int maxRetries,
+            @Value("${classification.review.max-attempts}") int reviewAttempts,
+            KafkaTemplate<String, Object> kafka) {
         var backOff = new ExponentialBackOff(initialInterval.toMillis(), multiplier);
         backOff.setMaxInterval(maxInterval.toMillis());
         backOff.setMaxAttempts(maxRetries);
-        var handler = new DefaultErrorHandler(backOff);
+        var handler = new DefaultErrorHandler(new ReviewRecoverer(kafka, reviewAttempts), backOff);
         handler.defaultFalse();
         handler.addRetryableExceptions(CalculatorUnavailable.class, AiUnavailable.class);
         return handler;

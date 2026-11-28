@@ -75,7 +75,7 @@ public final class ClassifyProduct {
             case Calculated calculation -> new Classified(suggestion, legalBasis.of(suggestion.cClassTrib(), today), calculation);
             case InputInconsistency(var errors) -> new ToReview(suggestion, ReviewReason.INPUT_INCONSISTENCY, errors);
             case NotImplemented(var errors) -> new ToReview(suggestion, ReviewReason.NOT_IMPLEMENTED, errors);
-            case TechnicalFailure(var errors) -> throw new CalculationFailed(errors);
+            case TechnicalFailure(var errors) -> new ToReview(suggestion, ReviewReason.TECHNICAL_FAILURE, errors);
         };
     }
 }

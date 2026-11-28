@@ -109,25 +109,18 @@ class ClassifyProductTest {
         assertThat(legalBasisRequests).isEmpty();
     }
 
-    /** Errors as release 1.6.1 answered them; REG-036 and REG-037 are INCONSISTENCIA_ENTRADA too and take the same path. */
+    /**
+     * Errors as release 1.6.1 answered them, CAL-999 as its catalog titles it; REG-036 and REG-037 are INCONSISTENCIA_ENTRADA too
+     * and take the same path.
+     */
     static Stream<Arguments> calculatorRejections() {
         var notLinked = List.of(new CalculationError("REG-011", "NCM de código 10063021 não vinculada à Classificação Tributária de código 200035 (CBS e IBS)"));
         var notImplemented = List.of(new CalculationError("CAL-007", "A classificação tributária 620001 ainda não possui tratamento tributário implementado na Calculadora. Essa funcionalidade está prevista no roadmap e será disponibilizada em versão futura."));
+        var technicalFailure = List.of(new CalculationError("CAL-999", "Erro interno do sistema"));
         return Stream.of(
                 Arguments.of(new InputInconsistency(notLinked), notLinked, ReviewReason.INPUT_INCONSISTENCY),
-                Arguments.of(new NotImplemented(notImplemented), notImplemented, ReviewReason.NOT_IMPLEMENTED));
-    }
-
-    @Test
-    void technicalFailureIsAFailureNotAReview() {
-        answer = new Suggestion("200", "200003", new BigDecimal("0.95"), "Arroz integra a cesta básica.");
-        calculation = new TechnicalFailure(List.of(
-                new CalculationError("CAL-001", "Alíquota não encontrada"), new CalculationError("CAL-999", "Erro interno do sistema")));
-
-        assertThatThrownBy(() -> classifyAt(NOON_IN_SAO_PAULO).classify(PRODUCT))
-                .isInstanceOf(CalculationFailed.class)
-                .hasMessage("the calculator failed on the item: CAL-001 Alíquota não encontrada; CAL-999 Erro interno do sistema");
-        assertThat(legalBasisRequests).isEmpty();
+                Arguments.of(new NotImplemented(notImplemented), notImplemented, ReviewReason.NOT_IMPLEMENTED),
+                Arguments.of(new TechnicalFailure(technicalFailure), technicalFailure, ReviewReason.TECHNICAL_FAILURE));
     }
 
     @ParameterizedTest
