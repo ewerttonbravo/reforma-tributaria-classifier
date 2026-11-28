@@ -139,3 +139,62 @@ and run `./mvnw -Dtest=ClassificationListenerTest#permanentFailureGoesToReviewWi
 
 ### What it does not cover
 A failed send to `produtos-revisao` classifies the record again, up to 3 times, then logs it at ERROR and skips it (trade-off "Review send failure"); with one broker, this cannot be caused by hand without stopping the consumer too, so `ReviewRecovererTest` covers it. A malformed record's review carries neither its value nor its offset (trade-off "Malformed record in review"). A result whose own send failed reaches review as `FAILED`, without its suggestion (D25).
+
+## Updates of the same product (task 14)
+
+Every update of a product is published under its code, so it lands on the same partition of `produtos` (D7). The listener reads a partition in order and retries a failed record in place, so a later update waits behind one that is retried instead of overtaking it (D24). Its results go out under the same key, so they keep that order on the output topic (D15).
+
+### Reproduce
+The first update finds the calculator stopped; the second is published once the calculator is back, while the first still waits for its next attempt. The waits are raised to 90 s, well past the time the calculator takes to start (D24), so there is time to publish the second while the first waits.
+
+0. Start from an empty broker and database: `docker compose down && docker compose up -d`, with the calculator running.
+1. Start the service with a Claude API key and waits of 90 s:
+   ```sh
+   java -jar target/tax-classifier.jar --classification.retry.initial-interval=90s \
+     --classification.retry.max-interval=90s --classification.retry.max-retries=3
+   ```
+2. Publish one product and wait for it on `produtos-classificados`, so the day's official lists are cached (D16), as in step 2 of "Calculator down and back".
+3. Stop the calculator and publish the first update:
+   ```sh
+   printf 'code;description;ncm;price\nP300;Arroz tipo 1 5kg;10063021;25.90\n' > /tmp/first.csv
+   java -jar target/tax-classifier.jar publish /tmp/first.csv
+   ```
+   Once its suggestion is saved its calculation fails, and the log shows `Record in retry and not yet recovered`:
+   ```sh
+   docker compose exec postgres psql -U tax_classifier -c "select count(*) from ai_suggestions where product_code = 'P300'"
+   ```
+4. Start the calculator again (see the README). Once it answers, check that P300 has no result yet on `produtos-classificados` (step 5) and publish the second update:
+   ```sh
+   printf 'code;description;ncm;price\nP300;Arroz tipo 1 5kg;10063021;26.50\n' > /tmp/second.csv
+   java -jar target/tax-classifier.jar publish /tmp/second.csv
+   ```
+5. Read the product's results:
+   ```sh
+   docker compose exec kafka /opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 \
+     --topic produtos-classificados --from-beginning --formatter-property print.key=true \
+     --formatter-property print.partition=true --formatter-property print.timestamp=true
+   ```
+   Both P300 results are on the same partition, 25.90 before 26.50. Run by hand: the second update was published 34 s after the calculator answered and waited 37 s behind the first; both came out at the first's next attempt, 52 ms apart, in order.
+
+### Break it
+Turn the retry non-blocking with Spring Boot's switch to retry topics, and run the ordering test:
+
+```sh
+./mvnw -Dtest=ClassificationListenerTest#updatesOfTheSameProductAreClassifiedInOrder \
+  -Dspring.kafka.retry.topic.enabled=true test
+```
+
+It fails with the results as `["2.00", "1.00"]`: the first update was moved to `produtos-retry` to wait, and the second, which found the calculator up, was classified before it. Without the flag the test passes.
+
+By hand, repeat steps 0 to 5 with the service of step 1 started instead with retry topics that wait 90 s:
+
+```sh
+java -jar target/tax-classifier.jar --spring.kafka.retry.topic.enabled=true \
+  --spring.kafka.retry.topic.attempts=3 --spring.kafka.retry.topic.backoff.delay=90s \
+  --spring.kafka.retry.topic.backoff.max-delay=90s
+```
+
+The topics `produtos-retry` and `produtos-dlt` appear. In step 3 the log line does not show up: the first update waits on `produtos-retry` instead, so wait for it there (step 5 with `--topic produtos-retry`) before starting the calculator. Run by hand: the second update, published 34 s after the calculator answered, came out 6.6 s later, and the first came out 30 s after it, 90 s after it entered `produtos-retry`: 26.50 before 25.90. Without `max-delay` the wait stays at its default ceiling of 30 s whatever the `delay`: run by hand, the first update came back after 31 s, before the second could be published, and the order held by chance.
+
+### What it does not cover
+A product's results keep their order within each output topic, but not across them: an update sent to `produtos-revisao` and the next one classified on `produtos-classificados` carry nothing that orders them (trade-off "Order across output topics"). A death between a result's send and its commit publishes that result again before the next update's (trade-off "At-least-once"). Two instances of the service are task 15.

@@ -20,15 +20,18 @@ import com.ebravo.taxclassifier.domain.TaxCalculation.Calculated;
 import com.ebravo.taxclassifier.domain.TaxCalculation.InputInconsistency;
 import com.ebravo.taxclassifier.domain.TaxClassification;
 import com.ebravo.taxclassifier.domain.TaxSituation;
+import com.jayway.jsonpath.JsonPath;
 import java.math.BigDecimal;
 import java.net.ConnectException;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Predicate;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
@@ -101,7 +104,8 @@ class ClassificationListenerTest {
             Map.entry("P013", RICE),
             Map.entry("P014", RICE),
             Map.entry("P015", RICE),
-            Map.entry("P017", RICE));
+            Map.entry("P017", RICE),
+            Map.entry("P019", RICE));
     /** REG-011 as release 1.6.1 answered it for P001 under 200035. */
     private static final CalculationError NOT_LINKED = new CalculationError("REG-011",
             "NCM de código 10063021 não vinculada à Classificação Tributária de código 200035 (CBS e IBS)");
@@ -109,6 +113,8 @@ class ClassificationListenerTest {
     private static final List<String> ADVISED = new CopyOnWriteArrayList<>();
     /** Whether the service already died once while calculating P009, after the AI answered and before publishing. */
     private static final AtomicBoolean DIED = new AtomicBoolean();
+    /** How many times the fake calculator was unavailable to P019 at 1.00, counted apart from its update at 2.00. */
+    private static final AtomicInteger FIRST_UPDATE_FAILURES = new AtomicInteger();
     /** The codes the fake calculator was asked to calculate. */
     private static final List<String> CALCULATED = new CopyOnWriteArrayList<>();
 
@@ -299,6 +305,20 @@ class ClassificationListenerTest {
     }
 
     @Test
+    void updatesOfTheSameProductAreClassifiedInOrder() {
+        // The first update finds the calculator unavailable twice; the second must wait for it, not overtake it.
+        var first = new Product("P019", "Arroz carnaroli 1kg", "10063021", new BigDecimal("1.00"));
+        var second = new Product("P019", "Arroz carnaroli 1kg", "10063021", new BigDecimal("2.00"));
+
+        publisher.publish(List.of(first, second));
+
+        assertThat(recordsWithKey("produtos-classificados", "P019", 2))
+                .extracting(record -> JsonPath.<String>read(record.value(), "$.calculation.base"))
+                .containsExactly("1.00", "2.00");
+        assertThat(CALCULATED).filteredOn("P019"::equals).hasSize(4);
+    }
+
+    @Test
     void offsetMovesPastAPublishedProduct() throws Exception {
         var sent = kafka.send(KafkaProductPublisher.TOPIC, 0, "P010", new ProductMessage("P010", "Arroz arbóreo 1kg", "10063021", "12.40"))
                 .join();
@@ -334,6 +354,16 @@ class ClassificationListenerTest {
 
     /** Reads the topic from the beginning until a record with the key and a matching value shows up. */
     private static ConsumerRecord<String, String> recordWithKey(String topic, String key, Predicate<String> value) {
+        return records(topic, key, value, 1).getFirst();
+    }
+
+    /** Reads the topic from the beginning until the given number of records with the key show up, in the order they were read. */
+    private static List<ConsumerRecord<String, String>> recordsWithKey(String topic, String key, int count) {
+        return records(topic, key, value -> true, count);
+    }
+
+    private static List<ConsumerRecord<String, String>> records(String topic, String key, Predicate<String> value, int count) {
+        var found = new ArrayList<ConsumerRecord<String, String>>();
         var config = Map.<String, Object>of(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, KAFKA.getBootstrapServers());
         try (var consumer = new KafkaConsumer<>(config, new StringDeserializer(), new StringDeserializer())) {
             var partitions = consumer.partitionsFor(topic).stream()
@@ -345,11 +375,16 @@ class ClassificationListenerTest {
             while (Instant.now().isBefore(deadline)) {
                 for (var record : consumer.poll(Duration.ofMillis(500))) {
                     if (key.equals(record.key()) && value.test(record.value())) {
-                        return record;
+                        found.add(record);
+                    }
+                    if (found.size() == count) {
+                        return found;
                     }
                 }
             }
-            throw new AssertionError("no record with key " + key + " in " + topic);
+            throw new AssertionError(found.isEmpty()
+                    ? "no record with key " + key + " in " + topic
+                    : found.size() + " of " + count + " records with key " + key + " in " + topic);
         }
     }
 
@@ -383,9 +418,9 @@ class ClassificationListenerTest {
         }
 
         /**
-         * Dies the first time it calculates P009; is unavailable the first 2 times it calculates P012 and every time for P013; REG-011
-         * for 200035; otherwise the amounts of the recorded calculation of P001 in 2026, on each product's price as the base,
-         * simulated for P005 only, so the flag is proven to reach the topic both ways.
+         * Dies the first time it calculates P009; is unavailable the first 2 times it calculates P012 or P019 at 1.00 and every time
+         * for P013; REG-011 for 200035; otherwise the amounts of the recorded calculation of P001 in 2026, on each product's price as
+         * the base, simulated for P005 only, so the flag is proven to reach the topic both ways.
          */
         @Bean
         @Primary
@@ -396,7 +431,9 @@ class ClassificationListenerTest {
                     throw new ServiceDied();
                 }
                 var attempts = CALCULATED.stream().filter(product.code()::equals).count();
-                if (product.code().equals("P012") && attempts <= 2 || product.code().equals("P013")) {
+                if (product.code().equals("P012") && attempts <= 2 || product.code().equals("P013")
+                        || product.code().equals("P019") && product.price().equals(new BigDecimal("1.00"))
+                                && FIRST_UPDATE_FAILURES.getAndIncrement() < 2) {
                     throw new CalculatorUnavailable(new ConnectException("Connection refused"));
                 }
                 return suggestion.cClassTrib().equals("200035")
