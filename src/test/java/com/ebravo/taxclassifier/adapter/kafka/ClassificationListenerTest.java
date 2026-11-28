@@ -176,7 +176,7 @@ class ClassificationListenerTest {
     }
 
     @Test
-    void failedClassificationIsTriedOnceAndSkipped() {
+    void permanentFailureIsTriedOnceAndSkipped() {
         // One partition, so P004 is classified only after the listener is done with P003.
         kafka.send(KafkaProductPublisher.TOPIC, 0, "P003", new ProductMessage("P003", "Produto sem resposta", "10063021", "1.00"));
         kafka.send(KafkaProductPublisher.TOPIC, 0, "P004", new ProductMessage("P004", "Arroz parboilizado 1kg", "10063021", "6.50"))
